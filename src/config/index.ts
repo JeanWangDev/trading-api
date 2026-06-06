@@ -1,17 +1,13 @@
 /**
- * 应用配置（与 demo-server 相同写法）
+ * 应用配置
  *
- * 加载顺序：
- *   1. 读取 `NODE_ENV`（默认 development）
- *   2. 加载项目根目录 `.env.{NODE_ENV}`（如 `.env.development`）
- *   3. 映射为 `config` 对象供全项目使用
+ * 环境变量加载见 `load-env.ts`：
+ *   - **主配置**：`.env.development`（本地 + 服务器共用一份即可）
+ *   - **可选补充**：`.env.pre` / `.env.production`（不覆盖 development 里已有项）
  *
- * 环境变量说明与示例值见：
- *   - `.env.development.example`（开发模板，含中文注释）
- *   - `.env.pre` / `.env.production`（预发/生产占位）
+ * 模板：`.env.development.example`
  */
-import dotenv from "dotenv";
-import path from "path";
+import { loadEnvFiles } from "@/config/load-env";
 
 /** 运行时配置结构；字段与 `.env.*` 中的变量一一对应 */
 export interface AppConfig {
@@ -73,12 +69,9 @@ export interface AppConfig {
 }
 
 // ---------------------------------------------------------------------------
-// 加载 .env.{NODE_ENV}
+// 加载环境变量（以 .env.development 为主）
 // ---------------------------------------------------------------------------
-const nodeEnv = process.env.NODE_ENV || "development";
-const envFile = `.env.${nodeEnv}`;
-
-dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+const nodeEnv = loadEnvFiles();
 
 /** 解析布尔环境变量：仅当值为字符串 "true" 时为 true */
 function envBool(key: string, fallback = false): boolean {

@@ -83,14 +83,13 @@ pm2 stop ecosystem.config.js
 
 | File | When loaded |
 |------|-------------|
-| `.env.development` | `NODE_ENV=development` (default for `yarn dev`) |
-| `.env.pre` | `NODE_ENV=pre` |
-| `.env.production` | `NODE_ENV=production` |
+| **`.env.development`** | **主配置**（本地 + VPS 共用；含 DB / JWT / 邮件等密钥） |
+| `.env.pre` / `.env.production` | 可选补充，**不覆盖** development 已有项 |
 | `.env` | Fallback overlay (gitignored) |
 
-Templates: `.env.example`, `.env.pre.example`, `.env.production.example`
+单环境部署：只维护 `.env.development`，`yarn deploy` 或 `yarn deploy:prod` 即可。
 
-环境变量说明见 `.env.development.example`（分段中文注释）；`src/config/index.ts` 内对每个字段有 JSDoc，并与 `.env` 变量名对应。pre/production 启动时会校验 `JWT_SECRET` 与数据库必填项。
+Templates: `.env.development.example`
 
 ## API endpoints
 

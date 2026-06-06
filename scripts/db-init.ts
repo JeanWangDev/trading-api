@@ -1,21 +1,17 @@
 /**
  * 初始化数据库表结构（执行 scripts/sql/init.sql）
  *
- * 读取与 config 相同的环境文件：`.env.{NODE_ENV}`（默认 development）
+ * 与运行时相同：优先读 `.env.development`
  * 使用变量：DB_HOST、DB_PORT、DB_USER、DB_PASSWORD、DB_SSL
  *
  * 用法：yarn db:init
  */
 import fs from "fs";
 import path from "path";
-import dotenv from "dotenv";
 import mysql from "mysql2/promise";
+import { loadEnvFiles } from "../src/config/load-env";
 
-const root = process.cwd();
-const nodeEnv = process.env.NODE_ENV ?? "development";
-const envFile = `.env.${nodeEnv}`;
-
-dotenv.config({ path: path.resolve(root, envFile) });
+loadEnvFiles();
 
 const host = process.env.DB_HOST ?? "127.0.0.1";
 const port = Number(process.env.DB_PORT ?? "3306");
