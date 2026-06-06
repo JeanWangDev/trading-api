@@ -2,10 +2,24 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 
+function loadEnvFile(filePath: string): number {
+  if (!fs.existsSync(filePath)) {
+    return 0;
+  }
+
+  const result = dotenv.config({ path: filePath });
+  const count = Object.keys(result.parsed ?? {}).length;
+
+  if (count === 0) {
+    console.warn(`[env] ${path.basename(filePath)} 存在但为空（0 个变量），跳过`);
+  }
+
+  return count;
+}
+
 /**
  * 按 NODE_ENV 加载环境文件。
- * production 时：优先 .env.production，不存在则回退 .env.development
- * （本地 / VPS 均可 yarn deploy:prod）
+ * production：优先 .env.production，无效则回退 .env.development
  */
 export function loadEnvFiles(): string {
   const root = process.cwd();
@@ -13,21 +27,23 @@ export function loadEnvFiles(): string {
   const primaryPath = path.resolve(root, `.env.${nodeEnv}`);
   const devFallback = path.resolve(root, ".env.development");
 
-  if (fs.existsSync(primaryPath)) {
-    dotenv.config({ path: primaryPath });
+  const primaryCount = loadEnvFile(primaryPath);
+  if (primaryCount > 0) {
     return nodeEnv;
   }
 
-  if (nodeEnv === "production" && fs.existsSync(devFallback)) {
-    console.warn("[env] 未找到 .env.production，回退使用 .env.development");
-    dotenv.config({ path: devFallback });
-    return nodeEnv;
+  if (nodeEnv === "production") {
+    const fallbackCount = loadEnvFile(devFallback);
+    if (fallbackCount > 0) {
+      console.warn("[env] 未找到有效 .env.production，回退使用 .env.development");
+      return nodeEnv;
+    }
   }
 
   console.warn(
-    `[env] 未找到 ${primaryPath}` +
-      (nodeEnv === "production" ? " 或 .env.development" : "") +
-      ` — 请 cp .env.${nodeEnv}.example .env.${nodeEnv} 并填写`,
+    `[env] 未找到有效配置 — 请创建 .env.${nodeEnv}` +
+      (nodeEnv === "production" ? " 或填写 .env.development" : "") +
+      `（cp .env.${nodeEnv}.example .env.${nodeEnv}）`,
   );
 
   return nodeEnv;

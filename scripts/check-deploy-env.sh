@@ -8,10 +8,15 @@ cd "$ROOT"
 
 ENV="${1:-production}"
 
+env_file_valid() {
+  local file="$1"
+  [[ -f "$file" ]] && grep -qE '^DB_HOST=.+' "$file" && grep -qE '^JWT_SECRET=.+' "$file"
+}
+
 if [[ "$ENV" == "production" ]]; then
-  if [[ -f .env.production ]]; then
+  if env_file_valid .env.production; then
     ENV_FILE=".env.production"
-  elif [[ -f .env.development ]]; then
+  elif env_file_valid .env.development; then
     ENV_FILE=".env.development"
   else
     ENV_FILE=".env.production"
@@ -33,14 +38,18 @@ echo "=== trading-api 部署自检 [${ENV}] ==="
 echo "目录: $ROOT"
 echo
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  if [[ "$ENV" == "production" ]]; then
-    fail "缺少 .env.production 或 .env.development"
+if ! env_file_valid "$ENV_FILE" 2>/dev/null; then
+  if [[ ! -f "$ENV_FILE" ]]; then
+    if [[ "$ENV" == "production" ]]; then
+      fail "缺少 .env.production 或 .env.development"
+    else
+      fail "缺少 ${ENV_FILE}（请 cp .env.${ENV}.example ${ENV_FILE}）"
+    fi
   else
-    fail "缺少 ${ENV_FILE}（请 cp .env.${ENV}.example ${ENV_FILE}）"
+    fail "${ENV_FILE} 存在但无效（空文件或缺少 DB_HOST / JWT_SECRET）"
   fi
 else
-  ok "${ENV_FILE} 存在"
+  ok "${ENV_FILE} 有效"
   for key in DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_SSL JWT_SECRET CLIENT_ORIGINS; do
     if grep -qE "^${key}=" "$ENV_FILE" 2>/dev/null; then
       ok "  ${key} 已配置"

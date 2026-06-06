@@ -25,21 +25,27 @@ case "$ENV" in
 esac
 
 # production：优先 .env.production，本地可回退 .env.development
+env_file_valid() {
+  local file="$1"
+  [[ -f "$file" ]] && grep -qE '^DB_HOST=.+' "$file" && grep -qE '^JWT_SECRET=.+' "$file"
+}
+
 if [[ "$ENV" == "production" ]]; then
-  if [[ -f .env.production ]]; then
+  if env_file_valid .env.production; then
     ENV_FILE=".env.production"
-  elif [[ -f .env.development ]]; then
+  elif env_file_valid .env.development; then
     ENV_FILE=".env.development"
-    echo "Note: 未找到 .env.production，使用 .env.development"
+    echo "Note: 未找到有效 .env.production，使用 .env.development"
   else
-    echo "Error: 缺少 .env.production 或 .env.development"
+    echo "Error: 缺少有效的 .env.production 或 .env.development"
+    echo "  需包含 DB_HOST、JWT_SECRET 等（不能为空文件）"
     echo "  请 cp .env.production.example .env.production 并填写"
     exit 1
   fi
 else
   ENV_FILE=".env.${ENV}"
-  if [[ ! -f "$ENV_FILE" ]]; then
-    echo "Error: 缺少 ${ENV_FILE}"
+  if ! env_file_valid "$ENV_FILE"; then
+    echo "Error: 缺少有效 ${ENV_FILE}"
     echo "  请 cp .env.${ENV}.example ${ENV_FILE} 并填写"
     exit 1
   fi
