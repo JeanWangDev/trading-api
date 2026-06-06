@@ -1,20 +1,7 @@
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-
 node_modules
 dist
 .pnp.*
 
-# 私密配置（勿提交）
-.env
-.env.development
-.env.pre
-.env.production
 .env*.local
 
-# OS / IDE
 .DS_Store

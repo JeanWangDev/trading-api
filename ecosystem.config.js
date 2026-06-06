@@ -3,7 +3,6 @@ const { resolve } = require("path");
 const root = __dirname;
 const tsxBin = resolve(root, "node_modules/.bin/tsx");
 
-/** PM2 — mirrors demo-server/ecosystem.config.js */
 module.exports = {
   apps: [
     {

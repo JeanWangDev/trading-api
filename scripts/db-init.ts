@@ -1,17 +1,15 @@
 /**
- * 初始化数据库表结构（执行 scripts/sql/init.sql）
- *
- * 与运行时相同：读 `.env`
- * 使用变量：DB_HOST、DB_PORT、DB_USER、DB_PASSWORD、DB_SSL
- *
- * 用法：yarn db:init
+ * 初始化数据库（yarn db:init）
  */
 import fs from "fs";
 import path from "path";
+import dotenv from "dotenv";
 import mysql from "mysql2/promise";
-import { loadEnvFiles } from "../src/config/load-env";
 
-loadEnvFiles();
+const root = process.cwd();
+const env = process.env.NODE_ENV || "development";
+
+dotenv.config({ path: path.resolve(root, `.env.${env}`) });
 
 const host = process.env.DB_HOST ?? "";
 const port = Number(process.env.DB_PORT ?? "4000");
@@ -42,29 +40,23 @@ async function main() {
     multipleStatements: true,
     charset: "utf8mb4",
     ...(sslEnabled
-      ? {
-          ssl: {
-            minVersion: "TLSv1.2",
-            rejectUnauthorized: true,
-          },
-        }
+      ? { ssl: { minVersion: "TLSv1.2", rejectUnauthorized: true } }
       : {}),
   });
 
   try {
-    console.log(`[db:init] connecting to ${host}:${port} as ${user} (ssl=${sslEnabled})`);
+    console.log(`[db:init] ${host}:${port}`);
     for (const file of sqlFiles) {
       const sql = fs.readFileSync(path.resolve(root, file), "utf8");
       await connection.query(sql);
-      console.log(`[db:init] applied ${file}`);
+      console.log(`[db:init] ${file}`);
     }
-    console.log("[db:init] schema applied successfully");
   } finally {
     await connection.end();
   }
 }
 
 main().catch((err) => {
-  console.error("[db:init] failed:", err.message ?? err);
+  console.error("[db:init]", err.message ?? err);
   process.exit(1);
 });
