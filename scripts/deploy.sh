@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/deploy.sh [development|pre|production]
+# Usage: ./scripts/deploy.sh  或  yarn deploy
 
 set -euo pipefail
 
-ENV="${1:-}"
 APP_NAME="trading-api"
 CONFIG_FILE="ecosystem.config.js"
 
-if [ -z "$ENV" ]; then
-  echo "Usage: ./scripts/deploy.sh [development|pre|production]"
+echo "Deploying ${APP_NAME}..."
+
+if [[ ! -f .env ]] && [[ ! -f .env.development ]]; then
+  echo "Error: 缺少 .env — 请 cp .env.example .env 并填写 TiDB / JWT"
   exit 1
 fi
-
-echo "Deploying ${APP_NAME} [env: ${ENV}]..."
 
 echo "Installing dependencies..."
 yarn install --immutable 2>/dev/null || yarn install
@@ -27,12 +26,12 @@ fi
 
 if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
   echo "Reloading existing PM2 process..."
-  pm2 reload "$CONFIG_FILE" --env "$ENV"
+  pm2 reload "$CONFIG_FILE"
 else
   echo "Starting new PM2 process..."
-  pm2 start "$CONFIG_FILE" --env "$ENV"
+  pm2 start "$CONFIG_FILE"
 fi
 
 echo "PM2 status:"
-pm2 status "$APP_NAME"
+pm2 status
 echo "Logs: pm2 logs ${APP_NAME}"

@@ -9,9 +9,10 @@ node_modules
 dist
 .pnp.*
 
-# 本地私密配置（与 demo-server 的 .env*.local 类似）
-.env*.local
+# 私密配置（勿提交）
+.env
 .env.development
+.env*.local
 
 # OS / IDE
 .DS_Store

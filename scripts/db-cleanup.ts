@@ -5,20 +5,18 @@
  */
 import fs from "fs";
 import path from "path";
-import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import type { Connection, RowDataPacket } from "mysql2/promise";
+import { loadEnvFiles } from "../src/config/load-env";
 
-const root = process.cwd();
-const nodeEnv = process.env.NODE_ENV ?? "development";
-dotenv.config({ path: path.resolve(root, `.env.${nodeEnv}`) });
+loadEnvFiles();
 
-const host = process.env.DB_HOST ?? "127.0.0.1";
-const port = Number(process.env.DB_PORT ?? "3306");
-const user = process.env.DB_USER ?? "root";
+const host = process.env.DB_HOST ?? "";
+const port = Number(process.env.DB_PORT ?? "4000");
+const user = process.env.DB_USER ?? "";
 const password = process.env.DB_PASSWORD ?? "";
 const dbName = process.env.DB_NAME ?? "trading-alpha";
-const sslEnabled = process.env.DB_SSL === "true";
+const sslEnabled = process.env.DB_SSL !== "false";
 
 async function columnExists(
   connection: Connection,

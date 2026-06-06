@@ -2,12 +2,9 @@
  * 事件 RSS 采集（MVP Lite）
  * 用法：yarn ingest:news
  */
-import path from "path";
-import dotenv from "dotenv";
+import { registerModuleAliases } from "../src/register-aliases";
 
-const root = process.cwd();
-const nodeEnv = process.env.NODE_ENV ?? "development";
-dotenv.config({ path: path.resolve(root, `.env.${nodeEnv}`) });
+registerModuleAliases(__dirname);
 
 import { runNewsIngest } from "@/ingest/run-news-ingest";
 

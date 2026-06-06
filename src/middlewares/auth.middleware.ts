@@ -74,7 +74,7 @@ export async function authMiddleware(ctx: Context, next: Next) {
   }
 
   if (!config.jwtSecret) {
-    if (config.isProd || config.env === "pre") {
+    if (config.isProd) {
       throw new UnauthorizedError("服务端鉴权未配置");
     }
 

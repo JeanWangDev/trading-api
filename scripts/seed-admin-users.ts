@@ -5,15 +5,13 @@
  *
  * 用法：yarn seed:admin-users
  */
-import path from "path";
-import dotenv from "dotenv";
+import { registerModuleAliases } from "../src/register-aliases";
+
+registerModuleAliases(__dirname);
+
 import { initModels } from "@/db";
 import { initDatabase } from "@/db/connection";
 import { AdminUserService } from "@/services/admin/admin-user.service";
-
-const root = process.cwd();
-const nodeEnv = process.env.NODE_ENV ?? "development";
-dotenv.config({ path: path.resolve(root, `.env.${nodeEnv}`) });
 
 async function main() {
   await initDatabase();
@@ -34,13 +32,10 @@ async function main() {
     },
     { skipPasswordCheck: true },
   );
-  console.log(`[seed] ensured admin account ${admin.email} (role: ${admin.roleKey})`);
-
-  console.log("[seed] done");
-  process.exit(0);
+  console.log(`[seed] admin account ready: ${admin.email} (level ${admin.roleLevel})`);
 }
 
 main().catch((err) => {
-  console.error("[seed] failed:", err.message ?? err);
+  console.error("[seed:admin-users] failed:", err);
   process.exit(1);
 });

@@ -15,7 +15,7 @@ export function optionalAuthUser(ctx: Context): AuthUser | null {
   if (!token) return null;
 
   if (!config.jwtSecret) {
-    if (config.isProd || config.env === "pre") return null;
+    if (config.isProd) return null;
     return decodeAccessTokenUnsafe(token);
   }
 

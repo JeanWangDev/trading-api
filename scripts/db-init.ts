@@ -1,7 +1,7 @@
 /**
  * 初始化数据库表结构（执行 scripts/sql/init.sql）
  *
- * 与运行时相同：优先读 `.env.development`
+ * 与运行时相同：读 `.env`
  * 使用变量：DB_HOST、DB_PORT、DB_USER、DB_PASSWORD、DB_SSL
  *
  * 用法：yarn db:init
@@ -13,11 +13,11 @@ import { loadEnvFiles } from "../src/config/load-env";
 
 loadEnvFiles();
 
-const host = process.env.DB_HOST ?? "127.0.0.1";
-const port = Number(process.env.DB_PORT ?? "3306");
-const user = process.env.DB_USER ?? "root";
+const host = process.env.DB_HOST ?? "";
+const port = Number(process.env.DB_PORT ?? "4000");
+const user = process.env.DB_USER ?? "";
 const password = process.env.DB_PASSWORD ?? "";
-const sslEnabled = process.env.DB_SSL === "true";
+const sslEnabled = process.env.DB_SSL !== "false";
 
 const sqlFiles = [
   "scripts/sql/init.sql",

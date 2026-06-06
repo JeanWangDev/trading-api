@@ -2,19 +2,20 @@
  * 单独执行 access_tier 迁移（已有库升级用，不跑全量 db:init）
  * 用法：yarn migrate:access-tier
  */
-import path from "path";
 import fs from "fs";
-import dotenv from "dotenv";
+import path from "path";
 import mysql from "mysql2/promise";
+import { loadEnvFiles } from "../src/config/load-env";
+
+loadEnvFiles();
 
 const root = process.cwd();
-dotenv.config({ path: path.resolve(root, `.env.${process.env.NODE_ENV ?? "development"}`) });
 
 async function main() {
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST ?? "127.0.0.1",
-    port: Number(process.env.DB_PORT ?? "3306"),
-    user: process.env.DB_USER ?? "root",
+    host: process.env.DB_HOST ?? "",
+    port: Number(process.env.DB_PORT ?? "4000"),
+    user: process.env.DB_USER ?? "",
     password: process.env.DB_PASSWORD ?? "",
     multipleStatements: true,
     charset: "utf8mb4",
