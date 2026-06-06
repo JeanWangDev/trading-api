@@ -1,0 +1,2 @@
+-- @deprecated 已拆分为 symbol-table.sql + trading-symbol-access-tier.sql + symbol-seed.sql
+-- 保留本文件便于旧文档引用；db:init 不再执行此文件。
