@@ -24,14 +24,28 @@ case "$ENV" in
     ;;
 esac
 
-ENV_FILE=".env.${ENV}"
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "Error: 缺少 ${ENV_FILE}"
-  echo "  请 cp .env.${ENV}.example ${ENV_FILE} 并填写"
-  exit 1
+# production：优先 .env.production，本地可回退 .env.development
+if [[ "$ENV" == "production" ]]; then
+  if [[ -f .env.production ]]; then
+    ENV_FILE=".env.production"
+  elif [[ -f .env.development ]]; then
+    ENV_FILE=".env.development"
+    echo "Note: 未找到 .env.production，使用 .env.development"
+  else
+    echo "Error: 缺少 .env.production 或 .env.development"
+    echo "  请 cp .env.production.example .env.production 并填写"
+    exit 1
+  fi
+else
+  ENV_FILE=".env.${ENV}"
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "Error: 缺少 ${ENV_FILE}"
+    echo "  请 cp .env.${ENV}.example ${ENV_FILE} 并填写"
+    exit 1
+  fi
 fi
 
-echo "Deploying ${APP_NAME} [${ENV}]..."
+echo "Deploying ${APP_NAME} [${ENV}] (config: ${ENV_FILE})..."
 
 echo "Installing dependencies..."
 yarn install --immutable 2>/dev/null || yarn install

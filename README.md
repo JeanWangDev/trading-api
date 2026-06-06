@@ -25,21 +25,18 @@ yarn install
 yarn dev                    # NODE_ENV=development → .env.development
 ```
 
-## VPS 部署
+## VPS / 本地 PM2（同一命令）
 
 ```bash
-# 确保 VPS 上有 .env.production（含 TiDB / JWT 等）
-yarn deploy:prod            # NODE_ENV=production → .env.production
-yarn check:deploy           # 自检 production
-pm2 logs trading-api
+yarn deploy:prod
 ```
 
-其他环境：
+| 机器 | 有的文件 | 实际读取 |
+|------|----------|----------|
+| 本地 | `.env.development` | 回退用 development |
+| VPS | `.env.production` | 优先 production |
 
-```bash
-yarn deploy:dev             # development
-yarn deploy:pre             # pre
-```
+PM2 均为 `NODE_ENV=production`；配置按上表自动选择。
 
 ## 数据库初始化
 

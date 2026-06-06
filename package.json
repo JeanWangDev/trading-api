@@ -15,7 +15,7 @@
     "pre": "NODE_ENV=pre tsx watch src/server.ts",
     "deploy:dev": "bash scripts/deploy.sh development",
     "deploy:pre": "bash scripts/deploy.sh pre",
-    "deploy:prod": "bash scripts/deploy.sh development",
+    "deploy:prod": "bash scripts/deploy.sh production",
     "deploy": "bash scripts/deploy.sh production",
     "check:deploy": "bash scripts/check-deploy-env.sh production",
     "check:deploy:dev": "bash scripts/check-deploy-env.sh development",

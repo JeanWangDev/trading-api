@@ -3,23 +3,32 @@ import fs from "fs";
 import path from "path";
 
 /**
- * 按 NODE_ENV 加载对应环境文件（demo-server 同款）：
- *   development → .env.development
- *   pre         → .env.pre
- *   production  → .env.production
+ * 按 NODE_ENV 加载环境文件。
+ * production 时：优先 .env.production，不存在则回退 .env.development
+ * （本地 / VPS 均可 yarn deploy:prod）
  */
 export function loadEnvFiles(): string {
   const root = process.cwd();
   const nodeEnv = process.env.NODE_ENV || "development";
-  const envPath = path.resolve(root, `.env.${nodeEnv}`);
+  const primaryPath = path.resolve(root, `.env.${nodeEnv}`);
+  const devFallback = path.resolve(root, ".env.development");
 
-  if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath });
-  } else {
-    console.warn(
-      `[env] 未找到 ${envPath} — 请 cp .env.${nodeEnv}.example .env.${nodeEnv} 并填写`,
-    );
+  if (fs.existsSync(primaryPath)) {
+    dotenv.config({ path: primaryPath });
+    return nodeEnv;
   }
+
+  if (nodeEnv === "production" && fs.existsSync(devFallback)) {
+    console.warn("[env] 未找到 .env.production，回退使用 .env.development");
+    dotenv.config({ path: devFallback });
+    return nodeEnv;
+  }
+
+  console.warn(
+    `[env] 未找到 ${primaryPath}` +
+      (nodeEnv === "production" ? " 或 .env.development" : "") +
+      ` — 请 cp .env.${nodeEnv}.example .env.${nodeEnv} 并填写`,
+  );
 
   return nodeEnv;
 }

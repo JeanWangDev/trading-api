@@ -7,7 +7,18 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 ENV="${1:-production}"
-ENV_FILE=".env.${ENV}"
+
+if [[ "$ENV" == "production" ]]; then
+  if [[ -f .env.production ]]; then
+    ENV_FILE=".env.production"
+  elif [[ -f .env.development ]]; then
+    ENV_FILE=".env.development"
+  else
+    ENV_FILE=".env.production"
+  fi
+else
+  ENV_FILE=".env.${ENV}"
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -23,7 +34,11 @@ echo "目录: $ROOT"
 echo
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  fail "缺少 ${ENV_FILE}（请 cp .env.${ENV}.example ${ENV_FILE}）"
+  if [[ "$ENV" == "production" ]]; then
+    fail "缺少 .env.production 或 .env.development"
+  else
+    fail "缺少 ${ENV_FILE}（请 cp .env.${ENV}.example ${ENV_FILE}）"
+  fi
 else
   ok "${ENV_FILE} 存在"
   for key in DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_SSL JWT_SECRET CLIENT_ORIGINS; do
