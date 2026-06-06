@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# 部署前自检：bash scripts/check-deploy-env.sh
+# 部署前自检：bash scripts/check-deploy-env.sh [development|pre|production]
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+ENV="${1:-production}"
+ENV_FILE=".env.${ENV}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,15 +18,12 @@ ok() { echo -e "${GREEN}✓${NC} $1"; }
 warn() { echo -e "${YELLOW}!${NC} $1"; }
 fail() { echo -e "${RED}✗${NC} $1"; }
 
-ENV_FILE=".env"
-[[ -f .env ]] || ENV_FILE=".env.development"
-
-echo "=== trading-api 部署自检 ==="
+echo "=== trading-api 部署自检 [${ENV}] ==="
 echo "目录: $ROOT"
 echo
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  fail "缺少 .env（请 cp .env.example .env）"
+  fail "缺少 ${ENV_FILE}（请 cp .env.${ENV}.example ${ENV_FILE}）"
 else
   ok "${ENV_FILE} 存在"
   for key in DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_SSL JWT_SECRET CLIENT_ORIGINS; do

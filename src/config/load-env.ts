@@ -3,21 +3,23 @@ import fs from "fs";
 import path from "path";
 
 /**
- * 单环境：只读项目根目录 `.env`（旧名 `.env.development` 仍兼容一次）
+ * 按 NODE_ENV 加载对应环境文件（demo-server 同款）：
+ *   development → .env.development
+ *   pre         → .env.pre
+ *   production  → .env.production
  */
 export function loadEnvFiles(): string {
   const root = process.cwd();
-  const envPath = path.resolve(root, ".env");
-  const legacyPath = path.resolve(root, ".env.development");
+  const nodeEnv = process.env.NODE_ENV || "development";
+  const envPath = path.resolve(root, `.env.${nodeEnv}`);
 
   if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath });
-  } else if (fs.existsSync(legacyPath)) {
-    console.warn("[env] 建议将 .env.development 重命名为 .env");
-    dotenv.config({ path: legacyPath });
   } else {
-    console.warn("[env] 未找到 .env — 请 cp .env.example .env 并填写 TiDB / JWT 等");
+    console.warn(
+      `[env] 未找到 ${envPath} — 请 cp .env.${nodeEnv}.example .env.${nodeEnv} 并填写`,
+    );
   }
 
-  return process.env.NODE_ENV || "production";
+  return nodeEnv;
 }

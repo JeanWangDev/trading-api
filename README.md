@@ -1,80 +1,60 @@
 # trading-api
 
-Trading platform backend for [trading-client](../trading-client). Market data gateway, auth, templates, events, WebSocket.
+Trading platform backend for [trading-client](../trading-client).
 
-## 环境配置
+## 环境文件（demo-server 同款）
 
-数据库只用 **TiDB Cloud**（无本地 MySQL）。根目录维护一份 **`.env`**（模板见 `.env.example`）：
+| 文件 | 用途 |
+|------|------|
+| `.env.development` | 本地 `yarn dev` |
+| `.env.pre` | 预发 |
+| `.env.production` | VPS 生产 `yarn deploy:prod` |
 
 ```bash
-cp .env.example .env
-# 填写 TiDB Cloud、JWT_SECRET 等
+cp .env.development.example .env.development   # 本地
+cp .env.production.example .env.production     # 生产（VPS）
 ```
 
-| Variable | 说明 |
-|----------|------|
-| `DB_HOST` / `DB_PORT=4000` / `DB_SSL=true` | TiDB Cloud |
-| `CLIENT_ORIGINS` | 生产域名；本地 `localhost:3000` 通过 CORS 正则自动放行 |
-
-旧文件名 `.env.development` 仍可读，建议重命名为 `.env`。
+数据库统一用 **TiDB Cloud**（`DB_PORT=4000`，`DB_SSL=true`），无本地 MySQL。
 
 ## 本地开发
 
 ```bash
-cp .env.example .env   # 填 TiDB 连接信息
+cp .env.development.example .env.development
 yarn install
-yarn dev               # http://localhost:4000
+yarn dev                    # NODE_ENV=development → .env.development
 ```
-
-前端（trading-client）：
-
-```bash
-cp .env.example .env.local
-yarn dev               # http://localhost:3000，代理到 localhost:4000
-```
-
-初始化表结构（只需一次）：
-
-```bash
-yarn db:init
-```
-
-Health check: `GET /health` → `{ data: { db: "up" | "down" | "disabled" } }`
 
 ## VPS 部署
 
 ```bash
-yarn build
-yarn start        # 或 PM2
-```
-
-```bash
-yarn deploy       # install + build + pm2 reload
-yarn check:deploy # 自检
+# 确保 VPS 上有 .env.production（含 TiDB / JWT 等）
+yarn deploy:prod            # NODE_ENV=production → .env.production
+yarn check:deploy           # 自检 production
 pm2 logs trading-api
 ```
 
-域名：`api.aipassly.com` → Nginx → `127.0.0.1:4000`
+其他环境：
 
-## API endpoints
-
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/health` | public |
-| GET | `/api/v1/market/*` | public + rate limit |
-| GET | `/api/v1/auth/*` | mixed |
-| WS | `/ws/market` | public |
-| WS | `/ws/events` | public |
-
-Response envelope: `{ code, success, message, data }`
-
-## Project structure
-
-```text
-src/
-├─ config/       # .env → config
-├─ db/           # Sequelize + TiDB
-├─ services/     # business logic
-├─ routes/v1/    # HTTP routes
-└─ ws/           # WebSocket hubs
+```bash
+yarn deploy:dev             # development
+yarn deploy:pre             # pre
 ```
+
+## 数据库初始化
+
+```bash
+NODE_ENV=development yarn db:init   # 或 production，读对应 .env.*
+```
+
+Health: `GET /health` → `{ data: { db: "up" | "down" | "disabled" } }`
+
+## API
+
+| Method | Path |
+|--------|------|
+| GET | `/health` |
+| GET | `/api/v1/market/*` |
+| WS | `/ws/market`, `/ws/events` |
+
+Response: `{ code, success, message, data }`

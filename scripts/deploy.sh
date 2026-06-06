@@ -1,17 +1,37 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/deploy.sh  或  yarn deploy
+# Usage: ./scripts/deploy.sh [development|pre|production]
+#   yarn deploy:dev   → development
+#   yarn deploy:pre   → pre
+#   yarn deploy:prod  → production
 
 set -euo pipefail
 
+ENV="${1:-}"
 APP_NAME="trading-api"
 CONFIG_FILE="ecosystem.config.js"
 
-echo "Deploying ${APP_NAME}..."
-
-if [[ ! -f .env ]] && [[ ! -f .env.development ]]; then
-  echo "Error: 缺少 .env — 请 cp .env.example .env 并填写 TiDB / JWT"
+if [[ -z "$ENV" ]]; then
+  echo "Error: 请传入部署环境: development | pre | production"
+  echo "  例: bash scripts/deploy.sh production"
   exit 1
 fi
+
+case "$ENV" in
+  development|pre|production) ;;
+  *)
+    echo "Error: 无效环境 '$ENV'，应为 development | pre | production"
+    exit 1
+    ;;
+esac
+
+ENV_FILE=".env.${ENV}"
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Error: 缺少 ${ENV_FILE}"
+  echo "  请 cp .env.${ENV}.example ${ENV_FILE} 并填写"
+  exit 1
+fi
+
+echo "Deploying ${APP_NAME} [${ENV}]..."
 
 echo "Installing dependencies..."
 yarn install --immutable 2>/dev/null || yarn install
@@ -26,10 +46,10 @@ fi
 
 if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
   echo "Reloading existing PM2 process..."
-  pm2 reload "$CONFIG_FILE"
+  pm2 reload "$CONFIG_FILE" --env "$ENV"
 else
   echo "Starting new PM2 process..."
-  pm2 start "$CONFIG_FILE"
+  pm2 start "$CONFIG_FILE" --env "$ENV"
 fi
 
 echo "PM2 status:"

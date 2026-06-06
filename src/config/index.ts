@@ -1,6 +1,5 @@
 /**
- * 应用配置 — 单环境，变量来自根目录 `.env`
- * 模板见 `.env.example`
+ * 应用配置 — 按 NODE_ENV 读取 `.env.{development|pre|production}`
  */
 import { loadEnvFiles } from "@/config/load-env";
 
@@ -105,7 +104,7 @@ function buildConfig(): AppConfig {
 export const config = buildConfig();
 
 if (!config.jwtSecret.trim()) {
-  throw new Error("JWT_SECRET is required — 请在 .env 中配置");
+  throw new Error(`JWT_SECRET is required — 请在 .env.${config.env} 中配置`);
 }
 
 if (
