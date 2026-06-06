@@ -1,11 +1,15 @@
 const { resolve } = require("path");
 
+const root = __dirname;
+const tsxBin = resolve(root, "node_modules/.bin/tsx");
+
 /** PM2 process manager config — mirrors demo-server/ecosystem.config.js */
 module.exports = {
   apps: [
     {
       name: "trading-api",
-      script: resolve(__dirname, "dist/server.js"),
+      cwd: root,
+      script: resolve(root, "dist/server.js"),
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
@@ -30,7 +34,8 @@ module.exports = {
     },
     {
       name: "trading-ingest",
-      script: "tsx",
+      cwd: root,
+      script: tsxBin,
       args: "scripts/ingest-loop.ts",
       instances: 1,
       exec_mode: "fork",
