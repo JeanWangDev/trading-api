@@ -111,7 +111,7 @@ const configs: Record<string, AppConfig> = {
 };
 
 export const config = configs[env] ?? development;
-
+console.log(`config`,config);
 if (!config.jwtSecret.trim()) {
   throw new Error(`JWT_SECRET is required — 请在 .env.${env} 中配置`);
 }
