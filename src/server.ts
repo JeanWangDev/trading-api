@@ -1,4 +1,7 @@
-import "module-alias/register";
+import { registerModuleAliases } from "./register-aliases";
+
+registerModuleAliases(__dirname);
+
 import { createServer } from "http";
 import { createApp } from "@/app";
 import { config } from "@/config";

@@ -1,7 +1,10 @@
 /**
  * 定时采集循环（供 PM2 trading-ingest 使用，默认 15 分钟）
  */
-import "module-alias/register";
+import { registerModuleAliases } from "../src/register-aliases";
+
+registerModuleAliases(__dirname);
+
 import { initDatabase } from "@/db/connection";
 import { initModels } from "@/db";
 import { runNewsIngest } from "@/ingest/run-news-ingest";
