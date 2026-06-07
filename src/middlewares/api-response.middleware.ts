@@ -22,6 +22,7 @@ export async function accessOriginMiddleware(ctx: Context, next: Next) {
   const originRegexPatterns = [
     /^https?:\/\/localhost(:\d+)?$/,
     /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+    /^https:\/\/([a-z0-9-]+\.)*aipassly\.com$/,
   ];
 
   const isAllowed =

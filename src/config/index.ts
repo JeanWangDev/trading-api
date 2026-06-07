@@ -93,7 +93,10 @@ const pre: AppConfig = {
   env: "pre",
   isDev: false,
   isProd: true,
-  clientOrigins: envList("CLIENT_ORIGINS", "https://aipassly.com,https://www.aipassly.com"),
+  clientOrigins: envList(
+    "CLIENT_ORIGINS",
+    "https://alpha.aipassly.com,https://aipassly.com,https://www.aipassly.com",
+  ),
 };
 
 const production: AppConfig = {
@@ -101,7 +104,10 @@ const production: AppConfig = {
   env: "production",
   isDev: false,
   isProd: true,
-  clientOrigins: envList("CLIENT_ORIGINS", "https://aipassly.com,https://www.aipassly.com"),
+  clientOrigins: envList(
+    "CLIENT_ORIGINS",
+    "https://alpha.aipassly.com,https://aipassly.com,https://www.aipassly.com",
+  ),
 };
 
 const configs: Record<string, AppConfig> = {
@@ -111,7 +117,7 @@ const configs: Record<string, AppConfig> = {
 };
 
 export const config = configs[env] ?? development;
-console.log(`config`,config);
+
 if (!config.jwtSecret.trim()) {
   throw new Error(`JWT_SECRET is required — 请在 .env.${env} 中配置`);
 }
