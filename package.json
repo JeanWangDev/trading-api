@@ -17,6 +17,7 @@
     "deploy:prod": "sh scripts/deploy.sh production",
     "lint": "eslint src --ext .ts --fix",
     "db:init": "tsx scripts/db-init.ts",
+    "ingest:news": "NODE_ENV=production tsx scripts/ingest-news.ts",
     "seed:admin-users": "tsx scripts/seed-admin-users.ts"
   },
   "dependencies": {
