@@ -43,19 +43,15 @@ module.exports = {
       max_memory_restart: "256M",
       env: {
         NODE_ENV: "development",
-        INGEST_INTERVAL_MS: "900000",
       },
       env_development: {
         NODE_ENV: "development",
-        INGEST_INTERVAL_MS: "900000",
       },
       env_pre: {
         NODE_ENV: "pre",
-        INGEST_INTERVAL_MS: "900000",
       },
       env_production: {
         NODE_ENV: "production",
-        INGEST_INTERVAL_MS: "900000",
       },
     },
   ],
