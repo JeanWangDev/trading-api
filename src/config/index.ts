@@ -66,7 +66,8 @@ const development: AppConfig = {
   marketRateLimitPerMin: parseInt(process.env.MARKET_RATE_LIMIT_PER_MIN || "120", 10),
   binanceRestBaseUrl:
     process.env.BINANCE_REST_BASE_URL || "https://data-api.binance.vision",
-  binanceWsBaseUrl: process.env.BINANCE_WS_BASE_URL || "wss://stream.binance.com:9443",
+  binanceWsBaseUrl:
+    process.env.BINANCE_WS_BASE_URL || "wss://data-stream.binance.vision",
   marketWsPath: process.env.MARKET_WS_PATH || "/ws/market",
   eventsWsPath: process.env.EVENTS_WS_PATH || "/ws/events",
   liquidationWorkerEnabled: envBool("LIQUIDATION_WORKER_ENABLED", true),

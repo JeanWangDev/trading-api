@@ -145,6 +145,7 @@ function openUpstream(streamKey: string, entry: PoolEntry) {
     }
 
     entry.reconnectAttempts = 0;
+    console.log(`[binance:ws] ${streamKey} upstream connected`);
   });
 
   const scheduleReconnect = () => {
