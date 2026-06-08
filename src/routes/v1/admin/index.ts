@@ -1,5 +1,6 @@
 import Router from "@koa/router";
 import { AdminTradingSymbolController, AdminUserController } from "@/controllers/admin";
+import { AdminBillingOrderController } from "@/controllers/admin/admin-billing-order.controller";
 
 const router = new Router({ prefix: "/admin" });
 
@@ -13,5 +14,7 @@ router.get("/users", AdminUserController.list);
 router.post("/users", AdminUserController.create);
 router.post("/users/update-role", AdminUserController.updateRole);
 router.post("/users/update-status", AdminUserController.updateStatus);
+
+router.get("/billing/orders", AdminBillingOrderController.list);
 
 export default router;

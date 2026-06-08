@@ -33,6 +33,22 @@ export interface AppConfig {
     ssl: boolean;
     asm: string;
   };
+  billing: {
+    enabled: boolean;
+    orderExpireMinutes: number;
+    devAutoConfirm: boolean;
+    autoUpgradeVip: boolean;
+    watchIntervalMs: number;
+    paymentWebhookUrl: string;
+    paymentWebhookSecret: string;
+    tron: {
+      usdtContract: string;
+      apiBaseUrl: string;
+      apiKey: string;
+      depositXpub: string;
+      treasuryAddress: string;
+    };
+  };
 }
 
 const env = process.env.NODE_ENV || "development";
@@ -61,7 +77,7 @@ const development: AppConfig = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   authSkipPaths: envList(
     "AUTH_SKIP_PATHS",
-    "/health,/api/v1/market,/api/v1/dashboard,/api/v1/events,/ws/market,/ws/events",
+    "/health,/api/v1/market,/api/v1/dashboard,/api/v1/events,/api/v1/billing/plans,/ws/market,/ws/events",
   ),
   marketRateLimitPerMin: parseInt(process.env.MARKET_RATE_LIMIT_PER_MIN || "120", 10),
   binanceRestBaseUrl:
@@ -87,6 +103,23 @@ const development: AppConfig = {
     ssl: envBool("DB_SSL", true),
     asm: process.env.DB_ASM || "",
   },
+  billing: {
+    enabled: envBool("BILLING_ENABLED", true),
+    orderExpireMinutes: parseInt(process.env.BILLING_ORDER_EXPIRE_MINUTES || "10", 10),
+    devAutoConfirm: envBool("BILLING_DEV_AUTO_CONFIRM", true),
+    autoUpgradeVip: envBool("BILLING_AUTO_UPGRADE_VIP", false),
+    watchIntervalMs: parseInt(process.env.PAYMENT_WATCH_INTERVAL_MS || "15000", 10),
+    paymentWebhookUrl: process.env.BILLING_PAYMENT_WEBHOOK_URL || "",
+    paymentWebhookSecret: process.env.BILLING_PAYMENT_WEBHOOK_SECRET || "",
+    tron: {
+      usdtContract:
+        process.env.TRON_USDT_CONTRACT || "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      apiBaseUrl: process.env.TRONGRID_API_URL || "https://api.trongrid.io",
+      apiKey: process.env.TRONGRID_API_KEY || "",
+      depositXpub: process.env.TRON_DEPOSIT_XPUB || "",
+      treasuryAddress: process.env.TRON_TREASURY_ADDRESS || "",
+    },
+  },
 };
 
 const pre: AppConfig = {
@@ -98,6 +131,10 @@ const pre: AppConfig = {
     "CLIENT_ORIGINS",
     "https://alpha.aipassly.com,https://aipassly.com,https://www.aipassly.com",
   ),
+  billing: {
+    ...development.billing,
+    devAutoConfirm: envBool("BILLING_DEV_AUTO_CONFIRM", false),
+  },
 };
 
 const production: AppConfig = {
@@ -109,6 +146,10 @@ const production: AppConfig = {
     "CLIENT_ORIGINS",
     "https://alpha.aipassly.com,https://aipassly.com,https://www.aipassly.com",
   ),
+  billing: {
+    ...development.billing,
+    devAutoConfirm: envBool("BILLING_DEV_AUTO_CONFIRM", false),
+  },
 };
 
 const configs: Record<string, AppConfig> = {

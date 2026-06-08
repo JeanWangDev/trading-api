@@ -40,3 +40,5 @@ pm2 logs trading-ingest
 **与 /trade 实时 K 线无关** — K 线走 `trading-api` 的 `/ws/market` → Binance。
 
 国内 VPS 请用 `wss://data-stream.binance.vision`（与 `data-api.binance.vision` 配套），勿用 `stream.binance.com`。
+
+会员支付详见 [docs/BILLING.md](./docs/BILLING.md)。

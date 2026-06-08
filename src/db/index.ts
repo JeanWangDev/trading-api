@@ -13,6 +13,12 @@ import { initEventModel } from "@/db/models/events";
 import { initTradingSymbolModel } from "@/db/models/market";
 
 import { initChartTemplateModel, initChartTemplateUsageModel } from "@/db/models/chart-template";
+import {
+  initMembershipPlanModel,
+  initPaymentAddressIndexModel,
+  initPaymentOrderModel,
+  initUserSubscriptionModel,
+} from "@/db/models/billing";
 
 /** 启动时注册 Sequelize 模型（需在 initDatabase 之后调用） */
 export async function initModels() {
@@ -26,6 +32,10 @@ export async function initModels() {
   await initTradingSymbolModel();
   await initChartTemplateModel();
   await initChartTemplateUsageModel();
+  await initMembershipPlanModel();
+  await initPaymentAddressIndexModel();
+  await initPaymentOrderModel();
+  await initUserSubscriptionModel();
 }
 
 export {
@@ -40,3 +50,9 @@ export {
 export { Event } from "@/db/models/events";
 export { TradingSymbol } from "@/db/models/market";
 export { ChartTemplate, ChartTemplateUsage } from "@/db/models/chart-template";
+export {
+  MembershipPlan,
+  PaymentAddressIndex,
+  PaymentOrder,
+  UserSubscription,
+} from "@/db/models/billing";

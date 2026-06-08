@@ -54,5 +54,28 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      name: "trading-payment-watch",
+      cwd: root,
+      script: tsxBin,
+      args: "scripts/payment-watch.ts",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "256M",
+      env: {
+        NODE_ENV: "development",
+      },
+      env_development: {
+        NODE_ENV: "development",
+      },
+      env_pre: {
+        NODE_ENV: "pre",
+      },
+      env_production: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };

@@ -22,4 +22,4 @@ else
 fi
 
 pm2 status
-echo "日志: pm2 logs $APP_NAME"
+echo "日志: pm2 logs trading-api | pm2 logs trading-payment-watch"
