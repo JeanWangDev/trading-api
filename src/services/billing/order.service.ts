@@ -8,7 +8,6 @@ import { config } from "@/config";
 import { BillingPlanService } from "./plan.service";
 import { BillingSubscriptionService } from "./subscription.service";
 import { BillingPaymentWebhookService } from "./payment-webhook.service";
-
 function assertDbReady() {
   if (!config.db.enabled) {
     throw new BadRequestError("数据库未启用");
