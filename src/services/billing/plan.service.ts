@@ -1,6 +1,8 @@
+import { Op } from "sequelize";
 import { MembershipPlan } from "@/db";
 import { BadRequestError } from "@/errors/app-error";
 import { config } from "@/config";
+import { isStrategyPlanKey } from "@/constants/strategy";
 
 function assertDbReady() {
   if (!config.db.enabled) {
@@ -13,14 +15,17 @@ export class BillingPlanService {
     assertDbReady();
 
     const rows = await MembershipPlan.findAll({
-      where: { status: 1 },
+      where: {
+        status: 1,
+        planKey: { [Op.notLike]: "strategy_%" },
+      },
       order: [
         ["sortOrder", "ASC"],
         ["id", "ASC"],
       ],
     });
 
-    return rows.map((row) => ({
+    return rows.filter((row) => !isStrategyPlanKey(row.planKey)).map((row) => ({
       planKey: row.planKey,
       name: row.name,
       description: row.description,

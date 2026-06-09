@@ -3,6 +3,8 @@ import { MembershipPlan, PaymentOrder, UserSubscription } from "@/db";
 import { BadRequestError } from "@/errors/app-error";
 import { config } from "@/config";
 import { MembershipRoleService } from "./membership-role.service";
+import { isStrategyPlanKey } from "@/constants/strategy";
+import { StrategyFollowService } from "@/services/strategy/strategy-follow.service";
 
 function assertDbReady() {
   if (!config.db.enabled) {
@@ -26,6 +28,7 @@ export class BillingSubscriptionService {
         userId,
         status: "active",
         endsAt: { [Op.gt]: now },
+        planKey: { [Op.notLike]: "strategy_%" },
       },
       order: [["endsAt", "DESC"]],
       include: [{ model: MembershipPlan, as: "plan", required: false }],
@@ -44,22 +47,23 @@ export class BillingSubscriptionService {
     };
   }
 
-  static async activateFromOrder(order: PaymentOrder): Promise<void> {
+  static async activateFromOrder(
+    order: PaymentOrder,
+    options?: { upgradeRole?: boolean },
+  ): Promise<void> {
     assertDbReady();
-
-    if (order.status === "paid") {
-      return;
-    }
 
     const plan = await MembershipPlan.findByPk(order.planId);
     if (!plan) {
       throw new BadRequestError("订单关联套餐不存在");
     }
 
+    const strategyPlan = isStrategyPlanKey(plan.planKey);
     const now = new Date();
     const current = await UserSubscription.findOne({
       where: {
         userId: order.userId,
+        planKey: plan.planKey,
         status: "active",
         endsAt: { [Op.gt]: now },
       },
@@ -70,7 +74,7 @@ export class BillingSubscriptionService {
       current && current.endsAt > now ? new Date(current.endsAt) : now;
     const endsAt = addDays(startsAt, plan.durationDays);
 
-    await UserSubscription.create({
+    const subscription = await UserSubscription.create({
       userId: order.userId,
       planId: plan.id,
       planKey: plan.planKey,
@@ -80,7 +84,15 @@ export class BillingSubscriptionService {
       endsAt,
     });
 
-    await MembershipRoleService.upgradeUserRole(order.userId, plan.targetRoleKey);
+    if (strategyPlan) {
+      await StrategyFollowService.recordFromOrder(order, subscription, plan);
+      console.log(`[billing] strategy follow activated plan=${plan.planKey} user=${order.userId}`);
+      return;
+    }
+
+    if (options?.upgradeRole !== false) {
+      await MembershipRoleService.upgradeUserRole(order.userId, plan.targetRoleKey);
+    }
   }
 
   static async expireDueSubscriptions(): Promise<number> {
@@ -110,6 +122,7 @@ export class BillingSubscriptionService {
           userId,
           status: "active",
           endsAt: { [Op.gt]: now },
+          planKey: { [Op.notLike]: "strategy_%" },
         },
       });
 

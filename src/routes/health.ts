@@ -1,7 +1,7 @@
 import Router from "@koa/router";
 import { config } from "@/config";
 import { getSequelize } from "@/db/connection";
-
+const env = process.env.NODE_ENV || "development";
 const router = new Router();
 
 router.get("/health", async (ctx) => {
@@ -22,7 +22,7 @@ router.get("/health", async (ctx) => {
   }
 
   ctx.sendSuccess({
-    service: "trading-api",
+    service: env === "production" ? "trading-api" : `trading-api-${env}`,
     uptime: process.uptime(),
     db,
   });

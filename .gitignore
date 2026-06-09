@@ -3,5 +3,8 @@ dist
 .pnp.*
 
 .env*.local
+.env.pre
+.env.development
+.env.production
 
 .DS_Store

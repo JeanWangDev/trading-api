@@ -21,12 +21,21 @@ const PUBLIC_AUTH_ROUTES = new Set([
   "GET /api/v1/chart-templates/detail",
   "POST /api/v1/chart-templates/track",
   "GET /api/v1/billing/plans",
+  "GET /api/v1/strategies",
 ]);
 
 function isAuthExempt(ctx: Context): boolean {
   const routeKey = `${ctx.method} ${ctx.path}`;
 
   if (PUBLIC_AUTH_ROUTES.has(routeKey)) {
+    return true;
+  }
+
+  if (ctx.method === "GET" && /^\/api\/v1\/strategies\/[^/]+$/.test(ctx.path)) {
+    return true;
+  }
+
+  if (ctx.method === "GET" && /^\/api\/v1\/strategies\/[^/]+\/stats$/.test(ctx.path)) {
     return true;
   }
 

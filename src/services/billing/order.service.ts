@@ -8,6 +8,7 @@ import { config } from "@/config";
 import { BillingPlanService } from "./plan.service";
 import { BillingSubscriptionService } from "./subscription.service";
 import { BillingPaymentWebhookService } from "./payment-webhook.service";
+import { isStrategyPlanKey } from "@/constants/strategy";
 function assertDbReady() {
   if (!config.db.enabled) {
     throw new BadRequestError("数据库未启用");
@@ -282,8 +283,10 @@ export class BillingOrderService {
     await order.reload();
     await BillingPaymentWebhookService.notifyPaymentCompleted(order);
 
-    if (config.billing.autoUpgradeVip) {
-      await BillingSubscriptionService.activateFromOrder(order);
+    if (isStrategyPlanKey(order.planKey)) {
+      await BillingSubscriptionService.activateFromOrder(order, { upgradeRole: false });
+    } else if (config.billing.autoUpgradeVip) {
+      await BillingSubscriptionService.activateFromOrder(order, { upgradeRole: true });
     } else {
       console.log(`[billing] order ${order.orderNo} paid — VIP auto-upgrade disabled`);
     }

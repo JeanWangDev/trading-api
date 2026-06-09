@@ -33,6 +33,15 @@ export interface AppConfig {
     ssl: boolean;
     asm: string;
   };
+  strategy: {
+    platformFeeRate: number;
+    paperWatchIntervalMs: number;
+    copyWatchIntervalMs: number;
+  };
+  exchange: {
+    credentialsKey: string;
+    okxRestBaseUrl: string;
+  };
   billing: {
     enabled: boolean;
     orderExpireMinutes: number;
@@ -102,6 +111,15 @@ const development: AppConfig = {
     database: process.env.DB_NAME || "trading-alpha",
     ssl: envBool("DB_SSL", true),
     asm: process.env.DB_ASM || "",
+  },
+  strategy: {
+    platformFeeRate: parseFloat(process.env.STRATEGY_PLATFORM_FEE_RATE || "20"),
+    paperWatchIntervalMs: parseInt(process.env.STRATEGY_PAPER_WATCH_INTERVAL_MS || "90000", 10),
+    copyWatchIntervalMs: parseInt(process.env.STRATEGY_COPY_WATCH_INTERVAL_MS || "90000", 10),
+  },
+  exchange: {
+    credentialsKey: process.env.EXCHANGE_CREDENTIALS_KEY || "",
+    okxRestBaseUrl: process.env.OKX_REST_BASE_URL || "https://www.okx.com",
   },
   billing: {
     enabled: envBool("BILLING_ENABLED", true),
