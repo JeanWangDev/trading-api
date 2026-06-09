@@ -16,6 +16,7 @@ router.get("/v1", (ctx) => {
       "/api/v1/market/trading-pairs",
       "/api/v1/market/symbol-info",
       "/api/v1/market/ticker",
+      "/api/v1/chain-orders",
       "/ws/market",
       "/health",
     ],
