@@ -140,21 +140,6 @@ const development: AppConfig = {
   },
 };
 
-const pre: AppConfig = {
-  ...development,
-  env: "pre",
-  isDev: false,
-  isProd: true,
-  clientOrigins: envList(
-    "CLIENT_ORIGINS",
-    "https://alpha.aipassly.com,https://aipassly.com,https://www.aipassly.com",
-  ),
-  billing: {
-    ...development.billing,
-    devAutoConfirm: envBool("BILLING_DEV_AUTO_CONFIRM", false),
-  },
-};
-
 const production: AppConfig = {
   ...development,
   env: "production",
@@ -170,10 +155,14 @@ const production: AppConfig = {
   },
 };
 
+/** 测试服与本地均用 NODE_ENV=development + .env.development（测试服 PORT=4001） */
 const configs: Record<string, AppConfig> = {
   development,
-  pre,
   production,
+  /** @deprecated 使用 development */
+  pre: development,
+  /** @deprecated 使用 development */
+  test: development,
 };
 
 export const config = configs[env] ?? development;

@@ -2,20 +2,26 @@
 
 ## 环境
 
-`.env.development` / `.env.pre` / `.env.production`（同 demo-server）
+| 场景 | `NODE_ENV` | 配置文件 | 端口 |
+|------|------------|----------|------|
+| 本地开发 | `development` | `.env.development` | 4000 |
+| 测试服 | `development` | `.env.development`（服务器上 PORT=4001） | 4001 |
+| 生产 | `production` | `.env.production` | 4000 |
+
+本地与测试服共用 `.env.development`，靠 `PORT` 和服务器上的变量区分（如 `DB_NAME=trading-alpha-test`、`CLIENT_ORIGINS`）。
 
 ## 本地
 
 ```bash
-yarn dev
+yarn dev          # localhost:4000
+yarn dev:test     # localhost:4001（模拟测试服端口）
 ```
 
 ## 部署
 
 ```bash
-yarn deploy:dev
-yarn deploy:pre
-yarn deploy:prod
+yarn deploy:test  # api-test.aipassly.com → 4001
+yarn deploy:prod  # api.aipassly.com → 4000
 ```
 
 ## 数据库
