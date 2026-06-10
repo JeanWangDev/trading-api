@@ -32,6 +32,7 @@ const sqlFiles = [
   "scripts/sql/chart-template-usage.sql",
   "scripts/sql/email-verification.sql",
   "scripts/sql/chain-order.sql",
+  "scripts/sql/chain-order-risk-config.sql",
 ];
 
 async function main() {

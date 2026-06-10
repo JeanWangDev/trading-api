@@ -11,7 +11,10 @@ import {
 } from "@/db/models/auth";
 import { initEventModel } from "@/db/models/events";
 import { initTradingSymbolModel } from "@/db/models/market";
-import { initChainOrderModel } from "@/db/models/chain-order";
+import {
+  initChainOrderModel,
+  initChainOrderRiskConfigModel,
+} from "@/db/models/chain-order";
 
 import { initChartTemplateModel, initChartTemplateUsageModel } from "@/db/models/chart-template";
 import {
@@ -54,6 +57,7 @@ export async function initModels() {
   await initPaymentOrderModel();
   await initUserSubscriptionModel();
   await initChainOrderModel();
+  await initChainOrderRiskConfigModel();
 }
 
 export {
@@ -67,7 +71,7 @@ export {
 
 export { Event } from "@/db/models/events";
 export { TradingSymbol } from "@/db/models/market";
-export { ChainOrder } from "@/db/models/chain-order";
+export { ChainOrder, ChainOrderRiskConfig } from "@/db/models/chain-order";
 export { ChartTemplate, ChartTemplateUsage } from "@/db/models/chart-template";
 export {
   MembershipPlan,

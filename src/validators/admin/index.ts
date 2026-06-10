@@ -10,3 +10,8 @@ export {
   updateAdminUserStatusBodySchema,
   createAdminUserBodySchema,
 } from "./user.validator";
+
+export {
+  updateChainOrderRiskConfigBodySchema,
+  type UpdateChainOrderRiskConfigBody,
+} from "./chain-order-risk-config.validator";

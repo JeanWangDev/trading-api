@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { keccak256 } from "js-sha3";
 import { Op } from "sequelize";
-import { ChainOrder } from "@/db";
+import { ChainOrder, ChainOrderRiskConfig } from "@/db";
 import { BadRequestError, NotFoundError } from "@/errors/app-error";
 import { config } from "@/config";
 import { MarketService } from "@/services/market";
@@ -636,31 +636,49 @@ export type ChainOrderReceiptSyncResult = {
   errors: number;
 };
 
+export type ChainOrderRiskConfigValue = {
+  riskEnabled: boolean;
+  minMarginUsdt: number;
+  maxMarginUsdt: number;
+  minLeverage: number;
+  maxLeverage: number;
+  maxNotionalUsdt: number;
+  maxSlippagePercent: number;
+  dailyOrderLimit: number;
+  allowedChains: string[];
+  allowedProtocols: string[];
+  updatedBy: number | null;
+  updatedAt: number | null;
+  source: "env" | "db";
+};
+
+export type ChainOrderRiskConfigUpdate = Partial<{
+  riskEnabled: boolean;
+  minMarginUsdt: number;
+  maxMarginUsdt: number;
+  minLeverage: number;
+  maxLeverage: number;
+  maxNotionalUsdt: number;
+  maxSlippagePercent: number;
+  dailyOrderLimit: number;
+  allowedChains: string[];
+  allowedProtocols: string[];
+}>;
+
 export type ChainOrderPreflightResult = {
   allowed: boolean;
   reasons: string[];
   warnings: string[];
   dailyUsed: number;
   dailyRemaining: number | null;
-  limits: {
-    riskEnabled: boolean;
-    minMarginUsdt: number;
-    maxMarginUsdt: number;
-    minLeverage: number;
-    maxLeverage: number;
-    maxNotionalUsdt: number;
-    maxSlippagePercent: number;
-    dailyOrderLimit: number;
-    allowedChains: string[];
-    allowedProtocols: string[];
-  };
+  limits: ChainOrderRiskConfigValue;
 };
 
 function normalizeStringList(values: string[]): string[] {
   return values.map((value) => value.trim().toLowerCase()).filter(Boolean);
 }
 
-function chainOrderRiskLimits(): ChainOrderPreflightResult["limits"] {
+function chainOrderRiskLimits(): ChainOrderRiskConfigValue {
   return {
     riskEnabled: config.chainOrders.riskEnabled,
     minMarginUsdt: config.chainOrders.minMarginUsdt,
@@ -672,7 +690,97 @@ function chainOrderRiskLimits(): ChainOrderPreflightResult["limits"] {
     dailyOrderLimit: config.chainOrders.dailyOrderLimit,
     allowedChains: config.chainOrders.allowedChains,
     allowedProtocols: config.chainOrders.allowedProtocols,
+    updatedBy: null,
+    updatedAt: null,
+    source: "env",
   };
+}
+
+const RISK_CONFIG_KEY = "active";
+let riskConfigTableReady = false;
+
+function splitCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function numberOrFallback(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function assertValidRiskConfigValue(value: ChainOrderRiskConfigValue) {
+  if (!Number.isFinite(value.minMarginUsdt) || value.minMarginUsdt < 0) {
+    throw new BadRequestError("最小保证金必须大于等于 0");
+  }
+  if (!Number.isFinite(value.maxMarginUsdt) || value.maxMarginUsdt <= 0) {
+    throw new BadRequestError("最大保证金必须大于 0");
+  }
+  if (value.minMarginUsdt > value.maxMarginUsdt) {
+    throw new BadRequestError("最小保证金不能大于最大保证金");
+  }
+  if (!Number.isFinite(value.minLeverage) || value.minLeverage <= 0) {
+    throw new BadRequestError("最小杠杆必须大于 0");
+  }
+  if (!Number.isFinite(value.maxLeverage) || value.maxLeverage <= 0) {
+    throw new BadRequestError("最大杠杆必须大于 0");
+  }
+  if (value.minLeverage > value.maxLeverage) {
+    throw new BadRequestError("最小杠杆不能大于最大杠杆");
+  }
+  if (!Number.isFinite(value.maxNotionalUsdt) || value.maxNotionalUsdt <= 0) {
+    throw new BadRequestError("最大名义金额必须大于 0");
+  }
+  if (!Number.isFinite(value.maxSlippagePercent) || value.maxSlippagePercent < 0) {
+    throw new BadRequestError("最大滑点必须大于等于 0");
+  }
+  if (!Number.isInteger(value.dailyOrderLimit) || value.dailyOrderLimit < 0) {
+    throw new BadRequestError("每日订单上限必须是大于等于 0 的整数");
+  }
+}
+
+function mapRiskConfigRow(row: ChainOrderRiskConfig): ChainOrderRiskConfigValue {
+  const fallback = chainOrderRiskLimits();
+  return {
+    riskEnabled: row.riskEnabled === 1,
+    minMarginUsdt: numberOrFallback(row.minMarginUsdt, fallback.minMarginUsdt),
+    maxMarginUsdt: numberOrFallback(row.maxMarginUsdt, fallback.maxMarginUsdt),
+    minLeverage: numberOrFallback(row.minLeverage, fallback.minLeverage),
+    maxLeverage: numberOrFallback(row.maxLeverage, fallback.maxLeverage),
+    maxNotionalUsdt: numberOrFallback(row.maxNotionalUsdt, fallback.maxNotionalUsdt),
+    maxSlippagePercent: numberOrFallback(row.maxSlippagePercent, fallback.maxSlippagePercent),
+    dailyOrderLimit: numberOrFallback(row.dailyOrderLimit, fallback.dailyOrderLimit),
+    allowedChains: splitCsv(row.allowedChains),
+    allowedProtocols: splitCsv(row.allowedProtocols),
+    updatedBy: row.updatedBy,
+    updatedAt: toTime(row.updateTime),
+    source: "db",
+  };
+}
+
+async function ensureRiskConfigTable(): Promise<void> {
+  if (riskConfigTableReady) return;
+  await ChainOrderRiskConfig.sync();
+  riskConfigTableReady = true;
+}
+
+async function findPersistedRiskConfig(options: { ensureTable: boolean }): Promise<ChainOrderRiskConfig | null> {
+  try {
+    if (options.ensureTable) {
+      await ensureRiskConfigTable();
+    }
+    return await ChainOrderRiskConfig.findByPk(RISK_CONFIG_KEY);
+  } catch (error) {
+    if (!options.ensureTable) return null;
+    throw error;
+  }
+}
+
+async function resolveChainOrderRiskLimits(): Promise<ChainOrderRiskConfigValue> {
+  const row = await findPersistedRiskConfig({ ensureTable: false });
+  return row ? mapRiskConfigRow(row) : chainOrderRiskLimits();
 }
 
 function startOfToday(): Date {
@@ -690,7 +798,7 @@ async function evaluateChainOrderRisk(
   userId: number,
   input: PreflightChainOrderBody,
 ): Promise<ChainOrderPreflightResult> {
-  const limits = chainOrderRiskLimits();
+  const limits = await resolveChainOrderRiskLimits();
   const dailyUsed = await ChainOrder.count({
     where: {
       userId,
@@ -838,6 +946,48 @@ async function fetchTransactionReceipt(
 }
 
 export class ChainOrderService {
+  static async getRiskConfig(): Promise<ChainOrderRiskConfigValue> {
+    assertDbReady();
+    const row = await findPersistedRiskConfig({ ensureTable: true });
+    return row ? mapRiskConfigRow(row) : chainOrderRiskLimits();
+  }
+
+  static async updateRiskConfig(
+    input: ChainOrderRiskConfigUpdate,
+    adminUserId: number,
+  ): Promise<ChainOrderRiskConfigValue> {
+    assertDbReady();
+    await ensureRiskConfigTable();
+    const current = await ChainOrderService.getRiskConfig();
+    const next: ChainOrderRiskConfigValue = {
+      ...current,
+      ...input,
+      updatedBy: adminUserId,
+      updatedAt: Date.now(),
+      source: "db",
+    };
+
+    assertValidRiskConfigValue(next);
+
+    await ChainOrderRiskConfig.upsert({
+      configKey: RISK_CONFIG_KEY,
+      riskEnabled: next.riskEnabled ? 1 : 0,
+      minMarginUsdt: String(next.minMarginUsdt),
+      maxMarginUsdt: String(next.maxMarginUsdt),
+      minLeverage: String(next.minLeverage),
+      maxLeverage: String(next.maxLeverage),
+      maxNotionalUsdt: String(next.maxNotionalUsdt),
+      maxSlippagePercent: String(next.maxSlippagePercent),
+      dailyOrderLimit: Math.floor(next.dailyOrderLimit),
+      allowedChains: next.allowedChains.join(","),
+      allowedProtocols: next.allowedProtocols.join(","),
+      updatedBy: adminUserId,
+    });
+
+    const row = await findPersistedRiskConfig({ ensureTable: true });
+    return row ? mapRiskConfigRow(row) : next;
+  }
+
   static async preflight(userId: number, input: PreflightChainOrderBody) {
     assertDbReady();
     return evaluateChainOrderRisk(userId, input);
