@@ -15,7 +15,9 @@ const host = process.env.DB_HOST ?? "";
 const port = Number(process.env.DB_PORT ?? "4000");
 const user = process.env.DB_USER ?? "";
 const password = process.env.DB_PASSWORD ?? "";
+const database = process.env.DB_NAME ?? "trading-alpha";
 const sslEnabled = process.env.DB_SSL !== "false";
+const escapedDatabase = database.replace(/`/g, "``");
 
 const sqlFiles = [
   "scripts/sql/init.sql",
@@ -46,9 +48,11 @@ async function main() {
   });
 
   try {
-    console.log(`[db:init] ${host}:${port}`);
+    console.log(`[db:init] ${host}:${port}/${database}`);
     for (const file of sqlFiles) {
-      const sql = fs.readFileSync(path.resolve(root, file), "utf8");
+      const sql = fs
+        .readFileSync(path.resolve(root, file), "utf8")
+        .replaceAll("`trading-alpha`", `\`${escapedDatabase}\``);
       await connection.query(sql);
       console.log(`[db:init] ${file}`);
     }

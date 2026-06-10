@@ -32,9 +32,13 @@ export interface ChainOrderRecord {
   notionalUsdt: string | null;
   slippagePercent: string | null;
   entryPrice: string | null;
+  currentPrice: string | null;
   exitPrice: string | null;
   pnlUsdt: string | null;
   pnlPercent: string | null;
+  unrealizedPnlUsdt: string | null;
+  unrealizedPnlPercent: string | null;
+  pnlSource: "realized" | "market_estimate" | "none";
   strategyId: string | null;
   strategyName: string | null;
   agentId: string | null;
@@ -53,6 +57,8 @@ export interface ChainOrderPerformanceItem {
   closedOrders: number;
   failedOrders: number;
   totalPnlUsdt: string;
+  realizedPnlUsdt: string;
+  unrealizedPnlUsdt: string;
   avgPnlPercent: string | null;
   winRate: string | null;
 }

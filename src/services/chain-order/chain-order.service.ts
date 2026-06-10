@@ -3,6 +3,7 @@ import { Op } from "sequelize";
 import { ChainOrder } from "@/db";
 import { BadRequestError, NotFoundError } from "@/errors/app-error";
 import { config } from "@/config";
+import { MarketService } from "@/services/market";
 import type {
   ChainMarketType,
   ChainOrderPerformanceItem,
@@ -32,6 +33,11 @@ function toTime(value: Date | null | undefined): number {
 function normalizeNullableDecimal(value: string | null | undefined): string | null {
   if (value == null || value === "") return null;
   return String(value);
+}
+
+function formatDecimal(value: number, digits = 6): string {
+  if (!Number.isFinite(value)) return "0";
+  return value.toFixed(digits);
 }
 
 function deriveStatus(
@@ -69,9 +75,13 @@ function mapRow(row: ChainOrder): ChainOrderRecord {
     notionalUsdt: normalizeNullableDecimal(row.notionalUsdt),
     slippagePercent: normalizeNullableDecimal(row.slippagePercent),
     entryPrice: normalizeNullableDecimal(row.entryPrice),
+    currentPrice: null,
     exitPrice: normalizeNullableDecimal(row.exitPrice),
     pnlUsdt: normalizeNullableDecimal(row.pnlUsdt),
     pnlPercent: normalizeNullableDecimal(row.pnlPercent),
+    unrealizedPnlUsdt: null,
+    unrealizedPnlPercent: null,
+    pnlSource: row.pnlUsdt != null ? "realized" : "none",
     strategyId: row.strategyId,
     strategyName: row.strategyName,
     agentId: row.agentId,
@@ -83,15 +93,120 @@ function mapRow(row: ChainOrder): ChainOrderRecord {
   };
 }
 
+async function fetchLatestPrices(symbols: string[]): Promise<Map<string, number>> {
+  const uniqueSymbols = Array.from(
+    new Set(symbols.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean)),
+  );
+
+  const pairs = await Promise.all(
+    uniqueSymbols.map(async (symbol) => {
+      try {
+        const ticker = await MarketService.getTicker24h({ symbol });
+        return [symbol, ticker.lastPrice] as const;
+      } catch {
+        return [symbol, null] as const;
+      }
+    }),
+  );
+
+  const prices = new Map<string, number>();
+  for (const [symbol, price] of pairs) {
+    if (price != null && Number.isFinite(price) && price > 0) {
+      prices.set(symbol, price);
+    }
+  }
+  return prices;
+}
+
+function estimateOrderPnl(
+  order: ChainOrderRecord,
+  latestPrices: Map<string, number>,
+): ChainOrderRecord {
+  if (order.pnlUsdt != null) {
+    return {
+      ...order,
+      pnlSource: "realized",
+      currentPrice: order.exitPrice ?? order.entryPrice,
+    };
+  }
+
+  const currentPrice = latestPrices.get(order.symbol);
+  const entryPrice = order.entryPrice == null ? null : Number(order.entryPrice);
+  const margin = Number(order.marginUsdt);
+  const leverage = Number(order.leverage);
+  const notional = Number(order.notionalUsdt ?? margin * leverage);
+
+  if (
+    !currentPrice ||
+    !entryPrice ||
+    entryPrice <= 0 ||
+    !Number.isFinite(margin) ||
+    margin <= 0 ||
+    !Number.isFinite(notional) ||
+    notional <= 0 ||
+    order.txStatus === "failed" ||
+    order.txStatus === "cancelled"
+  ) {
+    return {
+      ...order,
+      currentPrice: currentPrice ? formatDecimal(currentPrice, 10) : null,
+      pnlSource: "none",
+    };
+  }
+
+  const rawMove = (currentPrice - entryPrice) / entryPrice;
+  const directionalMove = order.side === "long" ? rawMove : -rawMove;
+  const pnlUsdt = directionalMove * notional;
+  const pnlPercent = (pnlUsdt / margin) * 100;
+
+  return {
+    ...order,
+    currentPrice: formatDecimal(currentPrice, 10),
+    unrealizedPnlUsdt: formatDecimal(pnlUsdt),
+    unrealizedPnlPercent: formatDecimal(pnlPercent),
+    pnlSource: "market_estimate",
+  };
+}
+
+async function attachMarketEstimates(rows: ChainOrder[]): Promise<ChainOrderRecord[]> {
+  const records = rows.map(mapRow);
+  const latestPrices = await fetchLatestPrices(records.map((order) => order.symbol));
+  return records.map((order) => estimateOrderPnl(order, latestPrices));
+}
+
 function generateOrderId(): string {
   return `co_${randomUUID().replace(/-/g, "")}`;
 }
 
-function buildOrderValues(userId: number, input: UpsertChainOrderBody) {
+async function resolveEntryPrice(
+  input: UpsertChainOrderBody,
+  existing?: ChainOrder | null,
+): Promise<string | null> {
+  if (input.entryPrice != null) {
+    return String(input.entryPrice);
+  }
+  if (existing?.entryPrice != null) {
+    return String(existing.entryPrice);
+  }
+
+  try {
+    const ticker = await MarketService.getTicker24h({ symbol: input.symbol });
+    return String(ticker.lastPrice);
+  } catch {
+    return null;
+  }
+}
+
+async function buildOrderValues(
+  userId: number,
+  input: UpsertChainOrderBody,
+  existing?: ChainOrder | null,
+) {
   const txStatus = deriveStatus(input.txStatus, input.receiptStatus);
   const orderId = input.orderId || generateOrderId();
   const margin = Number(input.marginUsdt);
   const leverage = Number(input.leverage);
+  const entryPrice = await resolveEntryPrice(input, existing);
   const notional =
     input.notionalUsdt != null
       ? String(input.notionalUsdt)
@@ -121,7 +236,7 @@ function buildOrderValues(userId: number, input: UpsertChainOrderBody) {
     leverageX100: input.leverageX100 ?? Math.round(leverage * 100),
     notionalUsdt: notional,
     slippagePercent: input.slippagePercent ?? null,
-    entryPrice: input.entryPrice ?? null,
+    entryPrice,
     strategyId: input.strategyId ?? null,
     strategyName: input.strategyName ?? null,
     agentId: input.agentId ?? null,
@@ -137,10 +252,10 @@ export class ChainOrderService {
   static async upsertFromChainTx(userId: number, input: UpsertChainOrderBody) {
     assertDbReady();
 
-    const values = buildOrderValues(userId, input);
     const existing = await ChainOrder.findOne({
-      where: { txHash: values.txHash, userId },
+      where: { txHash: input.txHash.toLowerCase(), userId },
     });
+    const values = await buildOrderValues(userId, input, existing);
 
     if (existing) {
       await existing.update({
@@ -148,11 +263,13 @@ export class ChainOrderService {
         orderId: existing.orderId,
       });
       await existing.reload();
-      return mapRow(existing);
+      const [estimated] = await attachMarketEstimates([existing]);
+      return estimated;
     }
 
     const created = await ChainOrder.create(values);
-    return mapRow(created);
+    const [estimated] = await attachMarketEstimates([created]);
+    return estimated;
   }
 
   static async listForUser(userId: number, query: ListChainOrdersQuery) {
@@ -171,7 +288,7 @@ export class ChainOrderService {
       limit: query.limit,
     });
 
-    const orders = rows.map(mapRow);
+    const orders = await attachMarketEstimates(rows);
     return {
       orders,
       nextCursor: rows.length === query.limit ? rows[rows.length - 1]?.id ?? null : null,
@@ -186,7 +303,8 @@ export class ChainOrderService {
       throw new NotFoundError("链上订单不存在");
     }
 
-    return mapRow(row);
+    const [estimated] = await attachMarketEstimates([row]);
+    return estimated;
   }
 
   static async performanceSummary(userId: number): Promise<ChainOrderPerformanceItem[]> {
@@ -197,6 +315,7 @@ export class ChainOrderService {
       order: [["id", "DESC"]],
       limit: 1000,
     });
+    const orders = await attachMarketEstimates(rows);
 
     const groups = new Map<
       string,
@@ -208,16 +327,18 @@ export class ChainOrderService {
         closedOrders: number;
         failedOrders: number;
         totalPnl: number;
+        realizedPnl: number;
+        unrealizedPnl: number;
         pnlPercentSum: number;
         pnlPercentCount: number;
         winCount: number;
-        closedWithPnlCount: number;
+        pnlCount: number;
       }
     >();
 
-    for (const row of rows) {
-      const strategyId = row.strategyId || "manual";
-      const strategyName = row.strategyName || "手动下单";
+    for (const order of orders) {
+      const strategyId = order.strategyId || "manual";
+      const strategyName = order.strategyName || "手动下单";
       const current =
         groups.get(strategyId) ??
         {
@@ -228,25 +349,48 @@ export class ChainOrderService {
           closedOrders: 0,
           failedOrders: 0,
           totalPnl: 0,
+          realizedPnl: 0,
+          unrealizedPnl: 0,
           pnlPercentSum: 0,
           pnlPercentCount: 0,
           winCount: 0,
-          closedWithPnlCount: 0,
+          pnlCount: 0,
         };
 
       current.totalOrders += 1;
-      if (row.txStatus === "confirmed") current.confirmedOrders += 1;
-      if (row.txStatus === "closed") current.closedOrders += 1;
-      if (row.txStatus === "failed") current.failedOrders += 1;
+      if (order.txStatus === "confirmed") current.confirmedOrders += 1;
+      if (order.txStatus === "closed") current.closedOrders += 1;
+      if (order.txStatus === "failed") current.failedOrders += 1;
 
-      const pnl = row.pnlUsdt == null ? null : Number(row.pnlUsdt);
+      const realizedPnl = order.pnlUsdt == null ? null : Number(order.pnlUsdt);
+      if (realizedPnl != null && Number.isFinite(realizedPnl)) {
+        current.realizedPnl += realizedPnl;
+      }
+
+      const unrealizedPnl =
+        order.unrealizedPnlUsdt == null ? null : Number(order.unrealizedPnlUsdt);
+      if (unrealizedPnl != null && Number.isFinite(unrealizedPnl)) {
+        current.unrealizedPnl += unrealizedPnl;
+      }
+
+      const pnl =
+        realizedPnl != null && Number.isFinite(realizedPnl)
+          ? realizedPnl
+          : unrealizedPnl != null && Number.isFinite(unrealizedPnl)
+            ? unrealizedPnl
+            : null;
       if (pnl != null && Number.isFinite(pnl)) {
         current.totalPnl += pnl;
-        current.closedWithPnlCount += 1;
+        current.pnlCount += 1;
         if (pnl > 0) current.winCount += 1;
       }
 
-      const pnlPercent = row.pnlPercent == null ? null : Number(row.pnlPercent);
+      const pnlPercent =
+        order.pnlPercent == null
+          ? order.unrealizedPnlPercent == null
+            ? null
+            : Number(order.unrealizedPnlPercent)
+          : Number(order.pnlPercent);
       if (pnlPercent != null && Number.isFinite(pnlPercent)) {
         current.pnlPercentSum += pnlPercent;
         current.pnlPercentCount += 1;
@@ -263,13 +407,15 @@ export class ChainOrderService {
       closedOrders: item.closedOrders,
       failedOrders: item.failedOrders,
       totalPnlUsdt: item.totalPnl.toFixed(6),
+      realizedPnlUsdt: item.realizedPnl.toFixed(6),
+      unrealizedPnlUsdt: item.unrealizedPnl.toFixed(6),
       avgPnlPercent:
         item.pnlPercentCount > 0
           ? (item.pnlPercentSum / item.pnlPercentCount).toFixed(6)
           : null,
       winRate:
-        item.closedWithPnlCount > 0
-          ? (item.winCount / item.closedWithPnlCount).toFixed(6)
+        item.pnlCount > 0
+          ? (item.winCount / item.pnlCount).toFixed(6)
           : null,
     }));
   }
