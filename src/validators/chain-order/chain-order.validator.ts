@@ -24,6 +24,33 @@ export const chainOrderStatusSchema = z.enum([
   "cancelled",
 ]);
 
+
+export const preflightChainOrderBodySchema = z.object({
+  walletAddress: z.string().trim().regex(/^0x[a-fA-F0-9]{40}$/, "钱包地址无效"),
+  chain: z.string().trim().min(1).max(32).optional().default("bsc-testnet"),
+  chainId: z.string().trim().min(1).max(16).optional().default("0x61"),
+  protocol: z.string().trim().min(1).max(64).optional().default("mock-perp"),
+  contractAddress: nullableTrimmedString(64),
+  symbol: z
+    .string()
+    .trim()
+    .min(1)
+    .max(32)
+    .transform((value) => value.toUpperCase()),
+  pairLabel: z.string().trim().max(96).optional().default(""),
+  marketType: z.enum(["perp", "spot"]).optional().default("perp"),
+  side: z.enum(["long", "short"]),
+  orderType: z.enum(["market", "limit"]).optional().default("market"),
+  marginUsdt: decimalStringSchema,
+  leverage: decimalStringSchema,
+  leverageX100: z.coerce.number().int().positive().optional().nullable(),
+  notionalUsdt: decimalStringSchema.optional().nullable(),
+  slippagePercent: decimalStringSchema.optional().nullable(),
+  strategyId: nullableTrimmedString(64),
+  agentId: nullableTrimmedString(64),
+  source: z.string().trim().min(1).max(32).optional().default("web"),
+});
+
 export const upsertChainOrderBodySchema = z.object({
   orderId: nullableTrimmedString(64),
   walletAddress: z.string().trim().regex(/^0x[a-fA-F0-9]{40}$/, "钱包地址无效"),
@@ -80,5 +107,6 @@ export const chainOrderIdParamSchema = z.object({
   orderId: z.string().trim().min(1).max(64),
 });
 
+export type PreflightChainOrderBody = z.infer<typeof preflightChainOrderBodySchema>;
 export type UpsertChainOrderBody = z.infer<typeof upsertChainOrderBodySchema>;
 export type ListChainOrdersQuery = z.infer<typeof listChainOrdersQuerySchema>;

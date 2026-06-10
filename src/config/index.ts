@@ -64,6 +64,16 @@ export interface AppConfig {
     receiptRpcTimeoutMs: number;
     bscRpcUrl: string;
     bscTestnetRpcUrl: string;
+    riskEnabled: boolean;
+    minMarginUsdt: number;
+    maxMarginUsdt: number;
+    minLeverage: number;
+    maxLeverage: number;
+    maxNotionalUsdt: number;
+    maxSlippagePercent: number;
+    dailyOrderLimit: number;
+    allowedChains: string[];
+    allowedProtocols: string[];
   };
 }
 
@@ -81,6 +91,13 @@ function envList(key: string, fallback: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function envNumber(key: string, fallback: number): number {
+  const value = process.env[key];
+  if (value === undefined || value.trim() === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 const development: AppConfig = {
@@ -153,6 +170,16 @@ const development: AppConfig = {
     bscTestnetRpcUrl:
       process.env.BSC_TESTNET_RPC_URL ||
       "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
+    riskEnabled: envBool("CHAIN_ORDER_RISK_ENABLED", true),
+    minMarginUsdt: envNumber("CHAIN_ORDER_MIN_MARGIN_USDT", 1),
+    maxMarginUsdt: envNumber("CHAIN_ORDER_MAX_MARGIN_USDT", 100),
+    minLeverage: envNumber("CHAIN_ORDER_MIN_LEVERAGE", 1),
+    maxLeverage: envNumber("CHAIN_ORDER_MAX_LEVERAGE", 10),
+    maxNotionalUsdt: envNumber("CHAIN_ORDER_MAX_NOTIONAL_USDT", 500),
+    maxSlippagePercent: envNumber("CHAIN_ORDER_MAX_SLIPPAGE_PERCENT", 2),
+    dailyOrderLimit: Math.floor(envNumber("CHAIN_ORDER_DAILY_LIMIT", 50)),
+    allowedChains: envList("CHAIN_ORDER_ALLOWED_CHAINS", "bsc-testnet"),
+    allowedProtocols: envList("CHAIN_ORDER_ALLOWED_PROTOCOLS", "mock-perp"),
   },
 };
 

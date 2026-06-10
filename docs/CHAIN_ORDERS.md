@@ -70,6 +70,31 @@ production adapters are connected, a block-level event indexer should update
 fees, funding, close price, and realized PnL from protocol events and
 oracle/mark prices.
 
+## Risk Preflight
+
+Endpoint: `POST /api/v1/chain-orders/preflight`
+
+The frontend calls this endpoint before sending a wallet transaction. If
+`allowed=false`, the UI shows the returned reasons and does not open MetaMask.
+The current MVP limits are intentionally small for testnet safety.
+
+Config environment variables:
+
+- `CHAIN_ORDER_RISK_ENABLED`: default `true`.
+- `CHAIN_ORDER_MIN_MARGIN_USDT`: default `1`.
+- `CHAIN_ORDER_MAX_MARGIN_USDT`: default `100`.
+- `CHAIN_ORDER_MIN_LEVERAGE`: default `1`.
+- `CHAIN_ORDER_MAX_LEVERAGE`: default `10`.
+- `CHAIN_ORDER_MAX_NOTIONAL_USDT`: default `500`.
+- `CHAIN_ORDER_MAX_SLIPPAGE_PERCENT`: default `2`.
+- `CHAIN_ORDER_DAILY_LIMIT`: default `50`.
+- `CHAIN_ORDER_ALLOWED_CHAINS`: default `bsc-testnet`.
+- `CHAIN_ORDER_ALLOWED_PROTOCOLS`: default `mock-perp`.
+
+Production contracts must enforce critical risk limits on-chain as well; backend
+preflight is a product and abuse-control layer, not a substitute for protocol
+risk controls.
+
 ## Backend Receipt Watcher
 
 PM2 processes:

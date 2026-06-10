@@ -15,6 +15,7 @@ import type {
 } from "@/types/chain-order";
 import type {
   ListChainOrdersQuery,
+  PreflightChainOrderBody,
   UpsertChainOrderBody,
 } from "@/validators/chain-order";
 
@@ -635,6 +636,147 @@ export type ChainOrderReceiptSyncResult = {
   errors: number;
 };
 
+export type ChainOrderPreflightResult = {
+  allowed: boolean;
+  reasons: string[];
+  warnings: string[];
+  dailyUsed: number;
+  dailyRemaining: number | null;
+  limits: {
+    riskEnabled: boolean;
+    minMarginUsdt: number;
+    maxMarginUsdt: number;
+    minLeverage: number;
+    maxLeverage: number;
+    maxNotionalUsdt: number;
+    maxSlippagePercent: number;
+    dailyOrderLimit: number;
+    allowedChains: string[];
+    allowedProtocols: string[];
+  };
+};
+
+function normalizeStringList(values: string[]): string[] {
+  return values.map((value) => value.trim().toLowerCase()).filter(Boolean);
+}
+
+function chainOrderRiskLimits(): ChainOrderPreflightResult["limits"] {
+  return {
+    riskEnabled: config.chainOrders.riskEnabled,
+    minMarginUsdt: config.chainOrders.minMarginUsdt,
+    maxMarginUsdt: config.chainOrders.maxMarginUsdt,
+    minLeverage: config.chainOrders.minLeverage,
+    maxLeverage: config.chainOrders.maxLeverage,
+    maxNotionalUsdt: config.chainOrders.maxNotionalUsdt,
+    maxSlippagePercent: config.chainOrders.maxSlippagePercent,
+    dailyOrderLimit: config.chainOrders.dailyOrderLimit,
+    allowedChains: config.chainOrders.allowedChains,
+    allowedProtocols: config.chainOrders.allowedProtocols,
+  };
+}
+
+function startOfToday(): Date {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function riskNumber(value: string | number | null | undefined): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+async function evaluateChainOrderRisk(
+  userId: number,
+  input: PreflightChainOrderBody,
+): Promise<ChainOrderPreflightResult> {
+  const limits = chainOrderRiskLimits();
+  const dailyUsed = await ChainOrder.count({
+    where: {
+      userId,
+      createTime: { [Op.gte]: startOfToday() },
+    },
+  });
+  const dailyRemaining =
+    limits.dailyOrderLimit > 0 ? Math.max(limits.dailyOrderLimit - dailyUsed, 0) : null;
+  const reasons: string[] = [];
+  const warnings: string[] = [];
+
+  if (!limits.riskEnabled) {
+    warnings.push("链上订单风控当前未启用，仅返回参考额度");
+    return { allowed: true, reasons, warnings, dailyUsed, dailyRemaining, limits };
+  }
+
+  const allowedChains = normalizeStringList(limits.allowedChains);
+  const allowedProtocols = normalizeStringList(limits.allowedProtocols);
+  const chain = input.chain.trim().toLowerCase();
+  const protocol = input.protocol.trim().toLowerCase();
+
+  if (allowedChains.length > 0 && !allowedChains.includes(chain)) {
+    reasons.push("当前仅允许网络：" + limits.allowedChains.join(", "));
+  }
+
+  if (allowedProtocols.length > 0 && !allowedProtocols.includes(protocol)) {
+    reasons.push("当前仅允许协议：" + limits.allowedProtocols.join(", "));
+  }
+
+  const margin = riskNumber(input.marginUsdt);
+  const leverage = riskNumber(input.leverage);
+  const notional = riskNumber(input.notionalUsdt ?? margin * leverage);
+  const slippage = riskNumber(input.slippagePercent ?? 0);
+
+  if (!Number.isFinite(margin) || margin <= 0) {
+    reasons.push("保证金必须大于 0");
+  } else {
+    if (margin < limits.minMarginUsdt) {
+      reasons.push("单笔保证金不能低于 " + limits.minMarginUsdt + " USDT");
+    }
+    if (margin > limits.maxMarginUsdt) {
+      reasons.push("单笔保证金不能超过 " + limits.maxMarginUsdt + " USDT");
+    }
+  }
+
+  if (!Number.isFinite(leverage) || leverage <= 0) {
+    reasons.push("杠杆必须大于 0");
+  } else {
+    if (leverage < limits.minLeverage) {
+      reasons.push("杠杆不能低于 " + limits.minLeverage + "x");
+    }
+    if (leverage > limits.maxLeverage) {
+      reasons.push("测试环境杠杆不能超过 " + limits.maxLeverage + "x");
+    }
+  }
+
+  if (!Number.isFinite(notional) || notional <= 0) {
+    reasons.push("名义金额无效");
+  } else if (notional > limits.maxNotionalUsdt) {
+    reasons.push("名义金额不能超过 " + limits.maxNotionalUsdt + " USDT");
+  }
+
+  if (!Number.isFinite(slippage) || slippage < 0) {
+    reasons.push("滑点必须大于等于 0");
+  } else if (slippage > limits.maxSlippagePercent) {
+    reasons.push("滑点不能超过 " + limits.maxSlippagePercent + "%");
+  }
+
+  if (limits.dailyOrderLimit > 0 && dailyUsed >= limits.dailyOrderLimit) {
+    reasons.push("今日链上测试订单已达上限 " + limits.dailyOrderLimit + " 笔");
+  }
+
+  if (input.marketType === "spot") {
+    warnings.push("现货交易仍在预留阶段，当前主要验证合约下单链路");
+  }
+
+  return {
+    allowed: reasons.length === 0,
+    reasons,
+    warnings,
+    dailyUsed,
+    dailyRemaining,
+    limits,
+  };
+}
+
 function rpcUrlForChain(row: ChainOrder): string | null {
   const chain = row.chain.toLowerCase();
   const chainId = row.chainId.toLowerCase();
@@ -696,6 +838,11 @@ async function fetchTransactionReceipt(
 }
 
 export class ChainOrderService {
+  static async preflight(userId: number, input: PreflightChainOrderBody) {
+    assertDbReady();
+    return evaluateChainOrderRisk(userId, input);
+  }
+
   static async syncSubmittedReceipts(options: {
     limit?: number;
     timeoutMs?: number;

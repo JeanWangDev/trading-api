@@ -3,6 +3,7 @@ import { ChainOrderController } from "@/controllers/chain-order";
 
 const router = new Router({ prefix: "/chain-orders" });
 
+router.post("/preflight", ChainOrderController.preflight);
 router.post("/", ChainOrderController.upsert);
 router.get("/", ChainOrderController.list);
 router.get("/performance/summary", ChainOrderController.performanceSummary);

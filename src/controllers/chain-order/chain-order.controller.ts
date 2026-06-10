@@ -9,6 +9,7 @@ import { ChainOrderService } from "@/services/chain-order";
 import {
   chainOrderIdParamSchema,
   listChainOrdersQuerySchema,
+  preflightChainOrderBodySchema,
   upsertChainOrderBodySchema,
   validateBody,
   validateQuery,
@@ -24,6 +25,13 @@ function parseUserId(ctx: Context): number {
 }
 
 export class ChainOrderController {
+  static async preflight(ctx: Context) {
+    const userId = parseUserId(ctx);
+    const body = validateBody(preflightChainOrderBodySchema, ctx.request.body);
+    const result = await ChainOrderService.preflight(userId, body);
+    ctx.sendSuccess(result);
+  }
+
   static async upsert(ctx: Context) {
     const userId = parseUserId(ctx);
     const body = validateBody(upsertChainOrderBodySchema, ctx.request.body);
