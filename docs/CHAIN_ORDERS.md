@@ -60,12 +60,15 @@ Returns one order owned by the current user.
 Groups orders by strategy and returns total orders, confirmed/failed/closed
 counts, total PnL, average PnL percent, and win rate.
 
-The current mock-perp contract only opens positions, so realized PnL stays empty.
-The service estimates floating PnL from entry price and the latest market price.
-A backend receipt watcher now scans submitted transactions and updates confirmed
-/ failed status even if the user closes the browser. After production adapters
-are connected, an event indexer should update close price and realized PnL
-fields from chain events and oracle/mark prices.
+The current mock-perp contract mainly opens positions, so realized PnL stays
+empty until close events are recorded. The service estimates floating PnL from
+entry price and the latest market price. A backend receipt watcher now scans
+submitted transactions, updates confirmed / failed status even if the user
+closes the browser, and parses MockPerp receipt logs to backfill event-derived
+entry price, margin, leverage, and close/PnL fields when available. After
+production adapters are connected, a block-level event indexer should update
+fees, funding, close price, and realized PnL from protocol events and
+oracle/mark prices.
 
 ## Backend Receipt Watcher
 
@@ -86,13 +89,22 @@ Config environment variables:
 
 The watcher polls `submitted` orders, calls `eth_getTransactionReceipt`, and
 updates `f_tx_status`, `f_receipt_status`, `f_block_number`, and
-`f_raw_receipt_json`.
+`f_raw_receipt_json`. For the BSC Testnet MockPerp contract, it also parses:
+
+- `PositionOpened`: updates symbol, side, margin, leverage, notional, and
+  event-derived entry price.
+- `PositionClosed`: updates closed status, exit price, and realized PnL when
+  the matching order context is available.
+
+Parsed events are stored under `rawReceiptJson.parsedMockPerpEvents` for audit
+and debugging.
 
 ## Production PnL Plan
 
 For real on-chain execution, add a chain indexer service:
 
-1. Subscribe to contract events or poll blocks by tx hash.
+1. Promote the current receipt-level MockPerp parser into a block checkpoint
+   indexer for production protocols.
 2. Normalize fill events into entry/exit price, fee, funding, and position size.
 3. Compute realized PnL on close:
    - Long: `(exit - entry) / entry * notional - fees - funding`.

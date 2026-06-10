@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { keccak256 } from "js-sha3";
 import { Op } from "sequelize";
 import { ChainOrder } from "@/db";
 import { BadRequestError, NotFoundError } from "@/errors/app-error";
@@ -38,6 +39,359 @@ function normalizeNullableDecimal(value: string | null | undefined): string | nu
 function formatDecimal(value: number, digits = 6): string {
   if (!Number.isFinite(value)) return "0";
   return value.toFixed(digits);
+}
+
+const MOCK_PERP_POSITION_OPENED_TOPIC = "0x" + keccak256(
+  "PositionOpened(uint256,address,bytes32,uint8,uint256,uint256,uint256,uint256,uint256)",
+);
+const MOCK_PERP_POSITION_CLOSED_TOPIC = "0x" + keccak256(
+  "PositionClosed(uint256,address,bytes32,uint256)",
+);
+
+type EvmLog = {
+  address?: string;
+  topics?: unknown;
+  data?: string;
+  logIndex?: string;
+  [key: string]: unknown;
+};
+
+type ParsedMockPerpOpenedEvent = {
+  eventName: "PositionOpened";
+  positionId: string;
+  user: string;
+  symbol: string;
+  side: ChainOrderSide;
+  marginUsdt: string;
+  leverage: string;
+  leverageX100: number;
+  entryPrice: string;
+  stopLossPrice: string | null;
+  takeProfitPrice: string | null;
+  logIndex?: string;
+};
+
+type ParsedMockPerpClosedEvent = {
+  eventName: "PositionClosed";
+  positionId: string;
+  user: string;
+  symbol: string;
+  exitPrice: string;
+  logIndex?: string;
+};
+
+type ParsedMockPerpEvent = ParsedMockPerpOpenedEvent | ParsedMockPerpClosedEvent;
+
+type MockPerpReceiptContext = {
+  contractAddress?: string | null;
+  walletAddress?: string | null;
+  symbol?: string | null;
+  side?: string | null;
+  marginUsdt?: string | null;
+  leverage?: string | null;
+  existingEntryPrice?: string | null;
+};
+
+type ChainOrderDbPatch = Partial<{
+  txStatus: ChainOrderStatus;
+  receiptStatus: string | null;
+  blockNumber: string | null;
+  symbol: string;
+  side: ChainOrderSide;
+  marginUsdt: string;
+  leverage: string;
+  leverageX100: number;
+  notionalUsdt: string | null;
+  entryPrice: string | null;
+  exitPrice: string | null;
+  pnlUsdt: string | null;
+  pnlPercent: string | null;
+  rawReceiptJson: unknown;
+}>;
+
+function normalizeAddress(value: string | null | undefined): string | null {
+  if (!value || !/^0x[a-fA-F0-9]{40}$/.test(value)) return null;
+  return value.toLowerCase();
+}
+
+function normalizeHex(value: unknown): string | null {
+  if (typeof value !== "string" || !/^0x[a-fA-F0-9]*$/.test(value)) return null;
+  return value.toLowerCase();
+}
+
+function hexToBigInt(value: unknown): bigint | null {
+  const hex = normalizeHex(value);
+  if (!hex || hex === "0x") return null;
+  return BigInt(hex);
+}
+
+function asTopicList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const topics = value.map(normalizeHex);
+  if (topics.some((topic) => topic == null)) return null;
+  return topics as string[];
+}
+
+function dataWords(data: unknown): string[] {
+  const hex = normalizeHex(data);
+  if (!hex) return [];
+  const body = hex.slice(2);
+  if (body.length === 0 || body.length % 64 !== 0) return [];
+  const words: string[] = [];
+  for (let index = 0; index < body.length; index += 64) {
+    words.push("0x" + body.slice(index, index + 64));
+  }
+  return words;
+}
+
+function topicToAddress(topic: string | undefined): string | null {
+  if (!topic || !/^0x[a-f0-9]{64}$/.test(topic)) return null;
+  return "0x" + topic.slice(-40);
+}
+
+function bytes32ToText(topic: string | undefined): string | null {
+  if (!topic || !/^0x[a-f0-9]{64}$/.test(topic)) return null;
+  const buffer = Buffer.from(topic.slice(2), "hex");
+  const end = buffer.indexOf(0);
+  const sliced = end >= 0 ? buffer.subarray(0, end) : buffer;
+  const textValue = sliced.toString("utf8").trim();
+  return textValue ? textValue.toUpperCase() : null;
+}
+
+function formatUnits(value: bigint, decimals: number, maxFractionDigits = decimals): string {
+  const base = 10n ** BigInt(decimals);
+  const whole = value / base;
+  let fraction = (value % base).toString().padStart(decimals, "0");
+  fraction = fraction.slice(0, maxFractionDigits).replace(/0+$/, "");
+  return fraction ? whole.toString() + "." + fraction : whole.toString();
+}
+
+function parsePositionOpenedLog(log: EvmLog): ParsedMockPerpOpenedEvent | null {
+  const topics = asTopicList(log.topics);
+  const words = dataWords(log.data);
+  if (!topics || topics.length < 4 || words.length < 6) return null;
+
+  const positionId = hexToBigInt(topics[1]);
+  const user = topicToAddress(topics[2]);
+  const symbol = bytes32ToText(topics[3]);
+  const sideCode = hexToBigInt(words[0]);
+  const marginUsdc = hexToBigInt(words[1]);
+  const leverageX100Raw = hexToBigInt(words[2]);
+  const entryPriceE8 = hexToBigInt(words[3]);
+  const stopLossPriceE8 = hexToBigInt(words[4]);
+  const takeProfitPriceE8 = hexToBigInt(words[5]);
+
+  if (
+    positionId == null ||
+    !user ||
+    !symbol ||
+    sideCode == null ||
+    marginUsdc == null ||
+    leverageX100Raw == null ||
+    entryPriceE8 == null ||
+    leverageX100Raw > BigInt(Number.MAX_SAFE_INTEGER)
+  ) {
+    return null;
+  }
+
+  const side = sideCode === 1n ? "long" : sideCode === 2n ? "short" : null;
+  if (!side) return null;
+
+  return {
+    eventName: "PositionOpened",
+    positionId: positionId.toString(),
+    user,
+    symbol,
+    side,
+    marginUsdt: formatUnits(marginUsdc, 6, 10),
+    leverage: formatUnits(leverageX100Raw, 2, 6),
+    leverageX100: Number(leverageX100Raw),
+    entryPrice: formatUnits(entryPriceE8, 8, 10),
+    stopLossPrice: stopLossPriceE8 && stopLossPriceE8 > 0n ? formatUnits(stopLossPriceE8, 8, 10) : null,
+    takeProfitPrice:
+      takeProfitPriceE8 && takeProfitPriceE8 > 0n ? formatUnits(takeProfitPriceE8, 8, 10) : null,
+    logIndex: log.logIndex,
+  };
+}
+
+function parsePositionClosedLog(log: EvmLog): ParsedMockPerpClosedEvent | null {
+  const topics = asTopicList(log.topics);
+  const words = dataWords(log.data);
+  if (!topics || topics.length < 4 || words.length < 1) return null;
+
+  const positionId = hexToBigInt(topics[1]);
+  const user = topicToAddress(topics[2]);
+  const symbol = bytes32ToText(topics[3]);
+  const exitPriceE8 = hexToBigInt(words[0]);
+  if (positionId == null || !user || !symbol || exitPriceE8 == null) return null;
+
+  return {
+    eventName: "PositionClosed",
+    positionId: positionId.toString(),
+    user,
+    symbol,
+    exitPrice: formatUnits(exitPriceE8, 8, 10),
+    logIndex: log.logIndex,
+  };
+}
+
+function normalizeReceipt(value: unknown): EvmTransactionReceipt | null {
+  if (!value || typeof value !== "object") return null;
+  return value as EvmTransactionReceipt;
+}
+
+function parseMockPerpEvents(
+  receipt: EvmTransactionReceipt,
+  contractAddress?: string | null,
+): ParsedMockPerpEvent[] {
+  const logs = Array.isArray(receipt.logs) ? receipt.logs : [];
+  const expectedAddress = normalizeAddress(contractAddress ?? null);
+  const events: ParsedMockPerpEvent[] = [];
+
+  for (const log of logs) {
+    const topics = asTopicList(log.topics);
+    if (!topics || topics.length === 0) continue;
+
+    const logAddress = normalizeAddress(log.address);
+    if (expectedAddress && logAddress && logAddress !== expectedAddress) continue;
+
+    if (topics[0] === MOCK_PERP_POSITION_OPENED_TOPIC) {
+      const parsed = parsePositionOpenedLog(log);
+      if (parsed) events.push(parsed);
+    } else if (topics[0] === MOCK_PERP_POSITION_CLOSED_TOPIC) {
+      const parsed = parsePositionClosedLog(log);
+      if (parsed) events.push(parsed);
+    }
+  }
+
+  return events;
+}
+
+function eventMatchesContext(event: ParsedMockPerpEvent, context: MockPerpReceiptContext): boolean {
+  const wallet = normalizeAddress(context.walletAddress ?? null);
+  if (wallet && event.user !== wallet) return false;
+
+  const symbol = context.symbol?.trim().toUpperCase();
+  if (symbol && event.symbol !== symbol) return false;
+
+  return true;
+}
+
+function withParsedMockPerpEvents(
+  receipt: EvmTransactionReceipt,
+  events: ParsedMockPerpEvent[],
+): EvmTransactionReceipt {
+  return events.length > 0 ? { ...receipt, parsedMockPerpEvents: events } : receipt;
+}
+
+function computeNotionalUsdt(marginUsdt: string, leverage: string): string | null {
+  const margin = Number(marginUsdt);
+  const leverageValue = Number(leverage);
+  if (!Number.isFinite(margin) || !Number.isFinite(leverageValue)) return null;
+  return formatDecimal(margin * leverageValue, 10);
+}
+
+function computeRealizedPnlPatch(options: {
+  side: string | null | undefined;
+  entryPrice: string | null | undefined;
+  exitPrice: string;
+  marginUsdt: string | null | undefined;
+  leverage: string | null | undefined;
+}): Pick<ChainOrderDbPatch, "pnlUsdt" | "pnlPercent"> {
+  const entry = Number(options.entryPrice);
+  const exit = Number(options.exitPrice);
+  const margin = Number(options.marginUsdt);
+  const leverageValue = Number(options.leverage);
+  const notional = margin * leverageValue;
+
+  if (
+    !Number.isFinite(entry) ||
+    entry <= 0 ||
+    !Number.isFinite(exit) ||
+    exit <= 0 ||
+    !Number.isFinite(margin) ||
+    margin <= 0 ||
+    !Number.isFinite(notional) ||
+    notional <= 0
+  ) {
+    return {};
+  }
+
+  const rawMove = (exit - entry) / entry;
+  const directionalMove = options.side === "short" ? -rawMove : rawMove;
+  const pnlUsdt = directionalMove * notional;
+  const pnlPercent = (pnlUsdt / margin) * 100;
+
+  return {
+    pnlUsdt: formatDecimal(pnlUsdt, 10),
+    pnlPercent: formatDecimal(pnlPercent, 8),
+  };
+}
+
+function buildMockPerpReceiptPatch(
+  receiptLike: unknown,
+  context: MockPerpReceiptContext,
+): ChainOrderDbPatch {
+  const receipt = normalizeReceipt(receiptLike);
+  if (!receipt) return {};
+
+  const receiptStatus =
+    typeof receipt.status === "string" ? receipt.status.toLowerCase() : null;
+  const blockNumber = typeof receipt.blockNumber === "string" ? receipt.blockNumber : null;
+  const events = parseMockPerpEvents(receipt, context.contractAddress);
+  const opened = events.find(
+    (event): event is ParsedMockPerpOpenedEvent =>
+      event.eventName === "PositionOpened" && eventMatchesContext(event, context),
+  );
+  const closed = events.find(
+    (event): event is ParsedMockPerpClosedEvent =>
+      event.eventName === "PositionClosed" && eventMatchesContext(event, context),
+  );
+
+  const patch: ChainOrderDbPatch = {
+    rawReceiptJson: withParsedMockPerpEvents(receipt, events),
+  };
+
+  if (receiptStatus) {
+    patch.receiptStatus = receiptStatus;
+    patch.txStatus = deriveStatus(undefined, receiptStatus);
+  }
+  if (blockNumber) patch.blockNumber = blockNumber;
+
+  if (receiptStatus === "0x0") return patch;
+
+  if (opened) {
+    patch.txStatus = "confirmed";
+    patch.symbol = opened.symbol;
+    patch.side = opened.side;
+    patch.marginUsdt = opened.marginUsdt;
+    patch.leverage = opened.leverage;
+    patch.leverageX100 = opened.leverageX100;
+    patch.notionalUsdt = computeNotionalUsdt(opened.marginUsdt, opened.leverage);
+    patch.entryPrice = opened.entryPrice;
+  }
+
+  if (closed) {
+    const entryPrice = patch.entryPrice ?? context.existingEntryPrice;
+    const side = patch.side ?? context.side;
+    const marginUsdt = patch.marginUsdt ?? context.marginUsdt;
+    const leverage = patch.leverage ?? context.leverage;
+
+    patch.txStatus = "closed";
+    patch.exitPrice = closed.exitPrice;
+    Object.assign(
+      patch,
+      computeRealizedPnlPatch({
+        side,
+        entryPrice,
+        exitPrice: closed.exitPrice,
+        marginUsdt,
+        leverage,
+      }),
+    );
+  }
+
+  return patch;
 }
 
 function deriveStatus(
@@ -215,7 +569,7 @@ async function buildOrderValues(
         ? String(margin * leverage)
         : null;
 
-  return {
+  const values = {
     orderId,
     userId,
     walletAddress: input.walletAddress.toLowerCase(),
@@ -247,6 +601,19 @@ async function buildOrderValues(
     rawOrderJson: input.rawOrder ?? null,
     rawReceiptJson: input.rawReceipt ?? null,
   };
+
+  return {
+    ...values,
+    ...buildMockPerpReceiptPatch(input.rawReceipt, {
+      contractAddress: values.contractAddress,
+      walletAddress: values.walletAddress,
+      symbol: values.symbol,
+      side: values.side,
+      marginUsdt: values.marginUsdt,
+      leverage: values.leverage,
+      existingEntryPrice: values.entryPrice,
+    }),
+  };
 }
 
 
@@ -254,6 +621,8 @@ type EvmTransactionReceipt = {
   transactionHash?: string;
   status?: string;
   blockNumber?: string;
+  logs?: EvmLog[];
+  parsedMockPerpEvents?: ParsedMockPerpEvent[];
   [key: string]: unknown;
 };
 
@@ -373,11 +742,22 @@ export class ChainOrderService {
           typeof receipt.blockNumber === "string" ? receipt.blockNumber : row.blockNumber;
         const txStatus = deriveStatus(undefined, receiptStatus);
 
+        const receiptPatch = buildMockPerpReceiptPatch(receipt, {
+          contractAddress: row.contractAddress,
+          walletAddress: row.walletAddress,
+          symbol: row.symbol,
+          side: row.side,
+          marginUsdt: String(row.marginUsdt),
+          leverage: String(row.leverage),
+          existingEntryPrice: row.entryPrice == null ? null : String(row.entryPrice),
+        });
+
         await row.update({
           txStatus,
           receiptStatus,
           blockNumber,
           rawReceiptJson: receipt,
+          ...receiptPatch,
         });
 
         if (txStatus === "confirmed") {
