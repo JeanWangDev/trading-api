@@ -58,6 +58,13 @@ export interface AppConfig {
       treasuryAddress: string;
     };
   };
+  chainOrders: {
+    watchIntervalMs: number;
+    watchBatchSize: number;
+    receiptRpcTimeoutMs: number;
+    bscRpcUrl: string;
+    bscTestnetRpcUrl: string;
+  };
 }
 
 const env = process.env.NODE_ENV || "development";
@@ -137,6 +144,15 @@ const development: AppConfig = {
       depositXpub: process.env.TRON_DEPOSIT_XPUB || "",
       treasuryAddress: process.env.TRON_TREASURY_ADDRESS || "",
     },
+  },
+  chainOrders: {
+    watchIntervalMs: parseInt(process.env.CHAIN_ORDER_WATCH_INTERVAL_MS || "15000", 10),
+    watchBatchSize: parseInt(process.env.CHAIN_ORDER_WATCH_BATCH_SIZE || "50", 10),
+    receiptRpcTimeoutMs: parseInt(process.env.CHAIN_ORDER_RPC_TIMEOUT_MS || "8000", 10),
+    bscRpcUrl: process.env.BSC_RPC_URL || "https://bsc-dataseed.bnbchain.org",
+    bscTestnetRpcUrl:
+      process.env.BSC_TESTNET_RPC_URL ||
+      "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
   },
 };
 

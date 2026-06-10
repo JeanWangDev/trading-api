@@ -45,8 +45,9 @@ function deriveStatus(
   receiptStatus?: string | null,
 ): ChainOrderStatus {
   if (txStatus) return txStatus;
-  if (receiptStatus === "0x1") return "confirmed";
-  if (receiptStatus === "0x0") return "failed";
+  const normalizedReceiptStatus = receiptStatus?.toLowerCase();
+  if (normalizedReceiptStatus === "0x1") return "confirmed";
+  if (normalizedReceiptStatus === "0x0") return "failed";
   return "submitted";
 }
 
@@ -248,7 +249,157 @@ async function buildOrderValues(
   };
 }
 
+
+type EvmTransactionReceipt = {
+  transactionHash?: string;
+  status?: string;
+  blockNumber?: string;
+  [key: string]: unknown;
+};
+
+export type ChainOrderReceiptSyncResult = {
+  checked: number;
+  confirmed: number;
+  failed: number;
+  pending: number;
+  skipped: number;
+  errors: number;
+};
+
+function rpcUrlForChain(row: ChainOrder): string | null {
+  const chain = row.chain.toLowerCase();
+  const chainId = row.chainId.toLowerCase();
+
+  if (chain === "bsc-testnet" || chainId === "0x61" || chainId === "97") {
+    return config.chainOrders.bscTestnetRpcUrl || null;
+  }
+
+  if (
+    chain === "bsc" ||
+    chain === "bsc-mainnet" ||
+    chainId === "0x38" ||
+    chainId === "56"
+  ) {
+    return config.chainOrders.bscRpcUrl || null;
+  }
+
+  return null;
+}
+
+async function fetchTransactionReceipt(
+  rpcUrl: string,
+  txHash: string,
+  timeoutMs: number,
+): Promise<EvmTransactionReceipt | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "eth_getTransactionReceipt",
+        params: [txHash],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error("RPC request failed with HTTP " + response.status);
+    }
+
+    const payload = (await response.json()) as {
+      result?: EvmTransactionReceipt | null;
+      error?: { message?: string };
+    };
+
+    if (payload.error) {
+      throw new Error(payload.error.message || "RPC returned an error");
+    }
+
+    return payload.result ?? null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export class ChainOrderService {
+  static async syncSubmittedReceipts(options: {
+    limit?: number;
+    timeoutMs?: number;
+  } = {}): Promise<ChainOrderReceiptSyncResult> {
+    assertDbReady();
+
+    const limit = Math.max(
+      1,
+      Math.min(options.limit ?? config.chainOrders.watchBatchSize, 200),
+    );
+    const timeoutMs = options.timeoutMs ?? config.chainOrders.receiptRpcTimeoutMs;
+    const rows = await ChainOrder.findAll({
+      where: { txStatus: "submitted" },
+      order: [["id", "ASC"]],
+      limit,
+    });
+
+    const result: ChainOrderReceiptSyncResult = {
+      checked: rows.length,
+      confirmed: 0,
+      failed: 0,
+      pending: 0,
+      skipped: 0,
+      errors: 0,
+    };
+
+    for (const row of rows) {
+      const rpcUrl = rpcUrlForChain(row);
+      if (!rpcUrl) {
+        result.skipped += 1;
+        continue;
+      }
+
+      try {
+        const receipt = await fetchTransactionReceipt(rpcUrl, row.txHash, timeoutMs);
+        if (!receipt) {
+          result.pending += 1;
+          continue;
+        }
+
+        const receiptStatus =
+          typeof receipt.status === "string" ? receipt.status.toLowerCase() : null;
+        const blockNumber =
+          typeof receipt.blockNumber === "string" ? receipt.blockNumber : row.blockNumber;
+        const txStatus = deriveStatus(undefined, receiptStatus);
+
+        await row.update({
+          txStatus,
+          receiptStatus,
+          blockNumber,
+          rawReceiptJson: receipt,
+        });
+
+        if (txStatus === "confirmed") {
+          result.confirmed += 1;
+        } else if (txStatus === "failed") {
+          result.failed += 1;
+        } else {
+          result.pending += 1;
+        }
+      } catch (error) {
+        result.errors += 1;
+        console.warn("[chain-order-sync] receipt sync failed", {
+          orderId: row.orderId,
+          txHash: row.txHash,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return result;
+  }
+
   static async upsertFromChainTx(userId: number, input: UpsertChainOrderBody) {
     assertDbReady();
 

@@ -13,10 +13,10 @@ fi
 
 case "$ENV" in
   production|prod)
-    APPS="trading-api trading-ingest trading-strategy-watch trading-payment-watch"
+    APPS="trading-api trading-ingest trading-strategy-watch trading-payment-watch trading-chain-order-watch"
     ;;
   test|pre|development)
-    APPS="trading-api-test trading-ingest-test trading-strategy-watch-test trading-payment-watch-test"
+    APPS="trading-api-test trading-ingest-test trading-strategy-watch-test trading-payment-watch-test trading-chain-order-watch-test"
     ;;
   *)
     echo "不支持的环境: $ENV（请用 test 或 production）"
@@ -44,4 +44,4 @@ echo ""
 echo "生产 API: pm2 logs trading-api           (port 4000, .env.production)"
 echo "测试 API: pm2 logs trading-api-test       (port 4001, .env.development)"
 echo ""
-echo "若仍有旧进程 trading-api-pre 等，可执行: pm2 delete trading-api-pre trading-ingest-pre trading-strategy-watch-pre trading-payment-watch-pre"
+echo "若仍有旧进程 trading-api-pre 等，可执行: pm2 delete trading-api-pre trading-ingest-pre trading-strategy-watch-pre trading-payment-watch-pre trading-chain-order-watch-pre"

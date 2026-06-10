@@ -1,5 +1,5 @@
 {
-  "name":  "trading-api",
+  "name": "trading-api",
   "version": "0.1.0",
   "description": "Trading platform backend",
   "private": true,
@@ -21,7 +21,8 @@
     "ingest:loop": "NODE_ENV=production tsx scripts/ingest-loop.ts",
     "payment:watch": "NODE_ENV=production tsx scripts/payment-watch.ts",
     "strategy:watch": "NODE_ENV=production tsx scripts/strategy-watch.ts",
-    "seed:admin-users": "tsx scripts/seed-admin-users.ts"
+    "seed:admin-users": "tsx scripts/seed-admin-users.ts",
+    "chain-order:watch": "NODE_ENV=production tsx scripts/chain-order-watch.ts"
   },
   "dependencies": {
     "@koa/router": "^15.5.0",

@@ -60,9 +60,33 @@ Returns one order owned by the current user.
 Groups orders by strategy and returns total orders, confirmed/failed/closed
 counts, total PnL, average PnL percent, and win rate.
 
-The current mock-perp contract only opens positions, so PnL is usually empty.
-After production adapters are connected, an indexer should update close price
-and PnL fields from chain events and oracle/mark prices.
+The current mock-perp contract only opens positions, so realized PnL stays empty.
+The service estimates floating PnL from entry price and the latest market price.
+A backend receipt watcher now scans submitted transactions and updates confirmed
+/ failed status even if the user closes the browser. After production adapters
+are connected, an event indexer should update close price and realized PnL
+fields from chain events and oracle/mark prices.
+
+## Backend Receipt Watcher
+
+PM2 processes:
+
+- `trading-chain-order-watch` for production.
+- `trading-chain-order-watch-test` for the test environment.
+
+Script: `scripts/chain-order-watch.ts`
+
+Config environment variables:
+
+- `CHAIN_ORDER_WATCH_INTERVAL_MS`: default `15000`.
+- `CHAIN_ORDER_WATCH_BATCH_SIZE`: default `50`.
+- `CHAIN_ORDER_RPC_TIMEOUT_MS`: default `8000`.
+- `BSC_TESTNET_RPC_URL`: optional BSC Testnet RPC override.
+- `BSC_RPC_URL`: optional BSC mainnet RPC override.
+
+The watcher polls `submitted` orders, calls `eth_getTransactionReceipt`, and
+updates `f_tx_status`, `f_receipt_status`, `f_block_number`, and
+`f_raw_receipt_json`.
 
 ## Production PnL Plan
 
